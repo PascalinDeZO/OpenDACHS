@@ -91,7 +91,7 @@ def write_warc(url, file_):
                 "{}:\tHTTP status code {}".format(url, response.status_code)
             )
         else:
-            headers = response.content.headers.items()
+            headers = response.raw.headers.items()
             status_line = "200 OK"
             protocol="HTTP/1.0"
             status_and_headers = warcio.statusandheaders.StatusAndHeaders(
@@ -101,7 +101,7 @@ def write_warc(url, file_):
                 url,
                 "response",
                 payload=io.BytesIO(response.content),
-                http_headers=headers
+                http_headers=status_and_headers
             )
             writer.write_record(warc_record)
     except Exception:
