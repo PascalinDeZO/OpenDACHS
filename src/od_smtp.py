@@ -92,8 +92,8 @@ def sendmails(smtp, warcs):
     try:
         logger = logging.getLogger().getChild(sendmails.__name__)
         smtp_client = smtplib.SMTP(
-            host=smtp["server"]["host"],
-            port=smtp["server"]["port"]
+            host=smtp["SMTP"]["host"],
+            port=smtp["SMTP"]["port"]
         )
         for file_, warc in warcs:
             dest = json.load(open(file_))
