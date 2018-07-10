@@ -71,19 +71,17 @@ class TicketManager(object):
     def _create_table(self):
         """Create table if not exists."""
         try:
-            logger = logging.getLogger.getChild(self._create_table.__name__)
+            logger = logging.getLogger().getChild(self._create_table.__name__)
             connection = sqlite3.connect(
                 self.sqlite["SQLITE"]["database"],
                 detect_types=sqlite3.PARSE_COLNAMES
             )
             sql = (
-                "CREATE TABLE IF NOT EXISTS ?",
-                "(? STRING PRIMARY KEY,",
-                "? EMAIL, ? TIMESTAMP, ? STRING, ? STRING)"
+                "CREATE TABLE IF NOT EXISTS tickets"
+                "(ticket STRING PRIMARY KEY,"
+                "email STRING, timestamp TIMESTAMP, json STRING, warc STRING)"
             )
-            connection.execute(
-                sql, "tickets", "ticket", "email", "timestamp", "json", "warc"
-            )
+            connection.execute(sql)
             connection.commit()
             connection.close()
         except Exception:
@@ -102,6 +100,7 @@ class TicketManager(object):
                 self._get_ftp_client.__name__
             )
             ftp_client = ftplib.FTP_TLS(**self.ftp["FTP"])
+            ftp_client.prot_p()
         except KeyError:
             logger.exception("'FTP' header required")
             raise
@@ -121,8 +120,10 @@ class TicketManager(object):
         """
         try:
             logger = logging.getLogger().getChild(self.retrieve_file.__name__)
-            local_file = "{}/{}".format(self.LOCAL_FILES_DIR, file_)
-            fp = open(local_file)
+            local_file = "{}/{}".format(
+                self.LOCAL_FILES_DIR, file_.rsplit("/")[-1]
+            )
+            fp = open(local_file, "wb")
             ftp_client.retrbinary("RETR {}".format(file_), fp.write)
             ftp_client.delete(file_)
         except Exception:
@@ -141,7 +142,7 @@ class TicketManager(object):
             ftp_client = self._get_ftp_client()
             local_files = []
             os.makedirs(self.LOCAL_FILES_DIR, exist_ok=True)
-            for file_ in ftp_client.mlsd(self.ftp["cmd"]["RETR"]):
+            for file_ in ftp_client.nlst(self.ftp["cmd"]["RETR"]):
                 local_files.append(self.retrieve_file(ftp_client, file_))
         except KeyError:
             logger.exception("'cmd' header required")
@@ -225,13 +226,13 @@ class TicketManager(object):
             for file_, warc in warcs:
                 dest = json.load(open(file_))
                 rows.append(
-                    [
+                    (
                         dest["ticket"],
                         dest["email"],
                         datetime.datetime.now(),
                         file_,
                         warc
-                    ]
+                    )
                 )
         except Exception:
             logger.exception("failed to get rows")
@@ -249,7 +250,7 @@ class TicketManager(object):
                 self.sqlite["SQLITE"]["database"],
                 detect_types=sqlite3.PARSE_COLNAMES
             )
-            sql = ("INSERT INTO tickets VALUES (?, ?, ?, ?, ?)")
+            sql = "INSERT INTO tickets VALUES (?, ?, ?, ?, ?)"
             connection.executemany(sql, rows)
             connection.commit()
             connection.close()
