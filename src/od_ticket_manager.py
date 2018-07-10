@@ -31,10 +31,10 @@ import datetime
 
 # third party imports
 import requests
-
 import warcio
 
 # library specific imports
+import src.od_smtp
 
 
 class TicketManager(object):
@@ -278,6 +278,7 @@ class TicketManager(object):
             rows = self._get_rows(warcs)
             self._insert_rows(rows)
             logger.info(msg, stage, "sending mails")
+            src.od_smtp.sendmails(self.smtp, warcs)
         except Exception:
             logger.exception("failed to process tickets")
             raise
