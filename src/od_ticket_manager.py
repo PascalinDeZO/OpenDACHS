@@ -24,9 +24,7 @@
 import io
 import os
 import json
-import ftplib
 import logging
-import sqlite3
 import datetime
 
 # third party imports
@@ -34,7 +32,9 @@ import requests
 import warcio
 
 # library specific imports
+import src.od_ftp
 import src.od_smtp
+import src.od_sqlite
 
 
 class TicketManager(object):
@@ -49,11 +49,10 @@ class TicketManager(object):
     :ivar ConfigParser sqlite: SQLite configuration
     """
     DIR = "tmp"
-    LOCAL_FILES_DIR = "{}/json".format(DIR)
     WARCS_DIR = "{}/warc".format(DIR)
 
     def __init__(self, ftp, smtp, sqlite):
-        """Initialize ticket manager.
+        """Initialize ticket management.
 
         :param ConfigParser ftp: FTP configuration
         :param ConfigParser smtp: SMTP configuration
@@ -63,108 +62,25 @@ class TicketManager(object):
             self.ftp = ftp
             self.smtp = smtp
             self.sqlite = sqlite
-            self._create_table()
+            src.od_sqlite.create_table(self.sqlite)
+            os.makedirs(self.WARCS_DIR, exist_ok=True)
         except Exception:
             raise
         return
 
-    def _create_table(self):
-        """Create table if not exists."""
-        try:
-            logger = logging.getLogger().getChild(self._create_table.__name__)
-            connection = sqlite3.connect(
-                self.sqlite["SQLITE"]["database"],
-                detect_types=sqlite3.PARSE_COLNAMES
-            )
-            sql = (
-                "CREATE TABLE IF NOT EXISTS tickets"
-                "(ticket STRING PRIMARY KEY,"
-                "email STRING, timestamp TIMESTAMP, json STRING, warc STRING)"
-            )
-            connection.execute(sql)
-            connection.commit()
-            connection.close()
-        except Exception:
-            logger.exception("failed to create table")
-            raise SystemExit
-        return
-
-    def _get_ftp_client(self):
-        """Get FTP client.
-
-        :returns: FTP client
-        :rtype: FTP_TLS
-        """
-        try:
-            logger = logging.getLogger().getChild(
-                self._get_ftp_client.__name__
-            )
-            ftp_client = ftplib.FTP_TLS(**self.ftp["FTP"])
-            ftp_client.prot_p()
-        except KeyError:
-            logger.exception("'FTP' header required")
-            raise
-        except Exception:
-            logger.exception("failed to get FTP client")
-            raise
-        return ftp_client
-
-    def retrieve_file(self, ftp_client, file_):
-        """Retrieve file.
-
-        :param FTP_TLS ftp_client: FTP client
-        :param str file_: filename
-
-        :returns: local filename
-        :rtype: str
-        """
-        try:
-            logger = logging.getLogger().getChild(self.retrieve_file.__name__)
-            local_file = "{}/{}".format(
-                self.LOCAL_FILES_DIR, file_.rsplit("/")[-1]
-            )
-            fp = open(local_file, "wb")
-            ftp_client.retrbinary("RETR {}".format(file_), fp.write)
-            ftp_client.delete(file_)
-        except Exception:
-            logger.exception("failed to retrieve file %s", file_)
-            raise
-        return local_file
-
-    def retrieve_files(self):
-        """Retrieve files.
-
-        :returns: local filenames
-        :rtype: list
-        """
-        try:
-            logger = logging.getLogger().getChild(self.retrieve_files.__name__)
-            ftp_client = self._get_ftp_client()
-            local_files = []
-            os.makedirs(self.LOCAL_FILES_DIR, exist_ok=True)
-            for file_ in ftp_client.nlst(self.ftp["cmd"]["RETR"]):
-                local_files.append(self.retrieve_file(ftp_client, file_))
-        except KeyError:
-            logger.exception("'cmd' header required")
-            raise
-        except Exception:
-            logger.exception("failed to retrieve files")
-            raise
-        return local_files
-
-    def write_warc(self, file_):
+    def _write_warc(self, file_):
         """Write WARC.
 
-        :param str file_: local filename
+        :param str file_: local file
 
         :returns: WARC filename
         :rtype: str
         """
         try:
-            logger = logging.getLogger().getChild(self.write_warc.__name__)
+            logger = logging.getLogger().getChild(self._write_warc.__name__)
             dest = json.load(open(file_))
             warc = "{}/{}.warc".format(self.WARCS_DIR, dest["ticket"])
-            fp = open(warc, "wb")
+            fp = open(warc, mode="wb")
             writer = warcio.warcwriter.WARCWriter(fp, gzip=True)
             logger.info("send GET request {}".format(dest["url"]))
             response = requests.get(dest["url"])
@@ -189,75 +105,44 @@ class TicketManager(object):
                 )
                 writer.write_record(warc_record)
         except Exception:
-            logger.exception("an exception was raised during writing of WARC")
+            logger.exception("failed to write WARC %s", dest["ticket"])
             raise
         return warc
 
-    def write_warcs(self, files):
-        """Write WARCs.
+    def process_ticket(self, file_):
+        """Process ticket.
 
-        :param list files: local filenames
+        :param str file_: local file
 
-        :returns: WARC filenames
-        :rtype: list
+        :returns: row
+        :rtype: tuple
         """
         try:
-            logger = logging.getLogger().getChild(self.write_warcs.__name__)
-            os.makedirs(self.WARCS_DIR, exist_ok=True)
-            warcs = []
-            for file_ in files:
-                warcs.append((file_, self.write_warc(file_)))
-        except Exception:
-            logger.exception("failed to write WARCs")
-            raise
-        return warcs
-
-    def _get_rows(self, warcs):
-        """Get rows.
-
-        :param list warcs: WARC filenames
-
-        :returns: rows
-        :rtype: list
-        """
-        try:
-            logger = logging.getLogger().getChild(self._get_rows.__name__)
-            rows = []
-            for file_, warc in warcs:
-                dest = json.load(open(file_))
-                rows.append(
-                    (
-                        dest["ticket"],
-                        dest["email"],
-                        datetime.datetime.now(),
-                        file_,
-                        warc
-                    )
-                )
-        except Exception:
-            logger.exception("failed to get rows")
-            raise
-        return rows
-
-    def _insert_rows(self, rows):
-        """Insert rows.
-
-        :param list rows: rows
-        """
-        try:
-            logger = logging.getLogger().getChild(self._insert_rows.__name__)
-            connection = sqlite3.connect(
-                self.sqlite["SQLITE"]["database"],
-                detect_types=sqlite3.PARSE_COLNAMES
+            logger = logging.getLogger().getChild(self.process_ticket.__name__)
+            dest = json.load(open(file_))
+            timestamp = datetime.datetime.now()
+            warc = self._write_warc(file_)
+            row = (
+                dest["ticket"],
+                dest["email"],
+                dest["url"],
+                dest["creator0"],
+                dest["title"],
+                dest["publisher"],
+                dest["publicationYear"],
+                dest["generalResourceType"],
+                dest["resourceType"],
+                dest["flag"],
+                timestamp,
+                warc
             )
-            sql = "INSERT INTO tickets VALUES (?, ?, ?, ?, ?)"
-            connection.executemany(sql, rows)
-            connection.commit()
-            connection.close()
+            mail = (dest["email"], src.od_smtp.get_msg(self.smtp, file_))
         except Exception:
-            logger.exception("failed to insert rows")
+            logger.exception("failed to process ticket %s", dest["ticket"])
             raise
-        return
+        finally:
+            os.unlink(file_)
+        return row, mail
 
     def process_tickets(self):
         """Process tickets."""
@@ -265,21 +150,21 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(
                 self.process_tickets.__name__
             )
+            logger.info("retrieve files")
+            files = src.od_ftp.retrieve_files(self.ftp)
             logger.info("process tickets")
-            msg = "STAGE %d\t: %s"
-            stage = 1
-            logger.info(msg, stage, "retrieving tickets")
-            stage += 1
-            files = self.retrieve_files()
-            logger.info(msg, stage, "writing WARCs")
-            stage += 1
-            warcs = self.write_warcs(files)
-            logger.info(msg, stage, "inserting tickets")
-            stage += 1
-            rows = self._get_rows(warcs)
-            self._insert_rows(rows)
-            logger.info(msg, stage, "sending mails")
-            src.od_smtp.sendmails(self.smtp, warcs)
+            rows = []
+            mails = []
+            for file_ in files:
+                try:
+                    row, mail = self.process_ticket(file_)
+                    rows.append(row)
+                    mails.append(mail)
+                except Exception:
+                    logger.warning("failed to process ticket")
+                    raise
+            src.od_sqlite.insert_rows(self.sqlite, rows)
+            src.od_smtp.sendmails(self.smtp, mails)
         except Exception:
             logger.exception("failed to process tickets")
             raise
