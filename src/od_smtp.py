@@ -68,7 +68,7 @@ def get_body(smtp, file_):
         logger = logging.getLogger().getChild(get_body.__name__)
         dest = json.load(open(file_))
         body = "{}\n{}".format(
-            smtp["msg"]["body"],
+            smtp["body"][dest["flag"]],
             "\n".join(
                 "{}:\t{}".format(k.capitalize(), v)
                 for k, v in dest.items()
