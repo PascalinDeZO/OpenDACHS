@@ -55,12 +55,11 @@ def get_header_fields(smtp, file_):
     return header_fields
 
 
-def get_body(smtp, file_, warc):
+def get_body(smtp, file_):
     """Get body.
 
     :param ConfigParser smtp: SMTP configuration
     :param str file_: JSON file
-    :param str warc: WARC file
 
     :returns: body
     :rtype: str
@@ -68,14 +67,12 @@ def get_body(smtp, file_, warc):
     try:
         logger = logging.getLogger().getChild(get_body.__name__)
         dest = json.load(open(file_))
-        body = "\n".join(
-            [
-                smtp["msg"]["body"],
-                "\n".join(
-                    "{}:\t{}".format(k.capitalize(), v)
-                    for k, v in dest.items()
-                ),
-            ]
+        body = "{}\n{}".format(
+            smtp["msg"]["body"],
+            "\n".join(
+                "{}:\t{}".format(k.capitalize(), v)
+                for k, v in dest.items()
+            )
         )
     except Exception:
         logger.exception("failed to get body")
@@ -83,11 +80,31 @@ def get_body(smtp, file_, warc):
     return body
 
 
-def sendmails(smtp, warcs):
+def get_msg(smtp, file_):
+    """Get e-mail.
+
+    :param ConfigParser smtp: SMTP configuration
+    :param str file_: JSON file
+
+    :returns: msg
+    :rtype: str
+    """
+    try:
+        logger = logging.getLogger().getChild(get_msg.__name__)
+        header_fields = get_header_fields(smtp, file_)
+        body = get_body(smtp, file_)
+        msg = "{}\n{}".format(header_fields, body)
+    except Exception:
+        logger.exception("failed to get mail")
+        raise
+    return msg
+
+
+def sendmails(smtp, mails):
     """Send mail.
 
     :param ConfigParser smtp: SMTP configuration file
-    :param list warcs: WARC files
+    :param list mails: mails
     """
     try:
         logger = logging.getLogger().getChild(sendmails.__name__)
@@ -95,12 +112,8 @@ def sendmails(smtp, warcs):
             host=smtp["SMTP"]["host"],
             port=smtp["SMTP"]["port"]
         )
-        for file_, warc in warcs:
-            dest = json.load(open(file_))
-            header_fields = get_header_fields(smtp, file_)
-            body = get_body(smtp, file_, warc)
-            msg = "{}\n{}".format(header_fields, body)
-            smtp_client.sendmail(smtp["msg"]["from"], dest["email"], msg)
+        for to_addrs, msg in mails:
+            smtp_client.sendmail(smtp["msg"]["from"], to_addrs, msg)
     except Exception:
         logger.exception("failed to send mails")
         raise
