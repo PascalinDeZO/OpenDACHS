@@ -47,6 +47,8 @@ class TicketManager(object):
     :ivar ConfigParser ftp: FTP configuration
     :ivar ConfigParser smtp: SMTP configuration
     :ivar ConfigParser sqlite: SQLite configuration
+    :ivar dict sql: SQLite queries
+    :ivar list mails: e-mails
     """
     DIR = "tmp"
     WARCS_DIR = "{}/warc".format(DIR)
@@ -62,6 +64,8 @@ class TicketManager(object):
             self.ftp = ftp
             self.smtp = smtp
             self.sqlite = sqlite
+            self.sql = {"insert": [], "update": [], "delete": []}
+            self.mails = []
             src.od_sqlite.create_table(self.sqlite)
             os.makedirs(self.WARCS_DIR, exist_ok=True)
         except Exception:
@@ -109,63 +113,100 @@ class TicketManager(object):
             raise
         return warc
 
+    def _insert_ticket(self, file_):
+        """Insert ticket.
+
+        :param str file_: local file
+        """
+        try:
+            logger = logging.getLogger().getChild(self._insert_ticket.__name__)
+            dest = json.load(open(file_))
+            timestamp = datetime.datetime.now()
+            warc = self._write_warc(file_)
+            parameters = (
+                dest["ticket"],                     #: ticket
+                dest["email"],                      #: e-mail address
+                dest["url"],                        #: URL
+                dest["creator"],                    #: creator(s)
+                dest["title"],                      #: title
+                dest["publisher"],                  #: publisher
+                dest["publication_year"],           #: publication year
+                dest["general_resource_type"],      #: general resource type
+                dest["resource_type"],              #: resource type
+                dest["flag"],                       #: flag
+                timestamp,                          #: timestamp
+                warc                                #: WARC filename
+            )
+            self.sql["insert"].append(parameters)
+            self.mails.append(
+                (dest["mail"], src.od_smtp.get_msg(self.smtp, file_))
+            )
+        except Exception:
+            logger.exception("failed to insert ticket")
+            raise
+        return
+
+    def _update_ticket(self, file_):
+        """Update ticket.
+
+        :param str file_: local file
+        """
+        raise NotImplementedError
+
+    def _delete_ticket(self, file_):
+        """Delete ticket.
+
+        :param str file_: local file
+        """
+        raise NotImplementedError
+
     def process_ticket(self, file_):
         """Process ticket.
 
         :param str file_: local file
-
-        :returns: row
-        :rtype: tuple
         """
         try:
             logger = logging.getLogger().getChild(self.process_ticket.__name__)
             dest = json.load(open(file_))
-            timestamp = datetime.datetime.now()
-            warc = self._write_warc(file_)
-            row = (
-                dest["ticket"],
-                dest["email"],
-                dest["url"],
-                dest["creator0"],
-                dest["title"],
-                dest["publisher"],
-                dest["publicationYear"],
-                dest["generalResourceType"],
-                dest["resourceType"],
-                dest["flag"],
-                timestamp,
-                warc
-            )
-            mail = (dest["email"], src.od_smtp.get_msg(self.smtp, file_))
+            if dest["flag"] == "pending":
+                self._insert_ticket(file_)
+            elif dest["flag"] == "confirmed" or dest["flag"] == "accepted":
+                self._update_ticket(file_)
+            elif dest["flag"] == "denied":
+                self._delete_ticket(file_)
         except Exception:
             logger.exception("failed to process ticket %s", dest["ticket"])
             raise
         finally:
             os.unlink(file_)
-        return row, mail
+        return
 
-    def process_tickets(self):
-        """Process tickets."""
+    def manage_tickets(self):
+        """Manage tickets."""
         try:
             logger = logging.getLogger().getChild(
                 self.process_tickets.__name__
             )
-            logger.info("retrieve files")
+            logger.info("manage tickets")
+            logger.info("retrieve tickets")
             files = src.od_ftp.retrieve_files(self.ftp)
+            logger.info("retrieved %d tickets", len(files))
             logger.info("process tickets")
-            rows = []
-            mails = []
             for file_ in files:
                 try:
-                    row, mail = self.process_ticket(file_)
-                    rows.append(row)
-                    mails.append(mail)
+                    self._process_ticket(file_)
                 except Exception:
-                    logger.warning("failed to process ticket")
-                    raise
-            src.od_sqlite.insert_rows(self.sqlite, rows)
-            src.od_smtp.sendmails(self.smtp, mails)
+                    logger.warning("failed to process ticket %s", file_)
+            src.od_sqlite.execute(self.sqlite, self.sql)
+            for k, v in self.sql.items():
+                if k == "insert":
+                    logger.info("inserted %d new tickets", len(v))
+                elif k == "update":
+                    logger.info("updated %d tickets", len(v))
+                elif k == "delete":
+                    logger.info("deleted %d tickets", len(v))
+            src.od_smtp.sendmails(self.smtp, self.mails)
         except Exception:
-            logger.exception("failed to process tickets")
+            logger.exception("failed to prcocess files")
             raise
         return
