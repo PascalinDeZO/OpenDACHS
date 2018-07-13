@@ -28,114 +28,81 @@ import sqlite3
 # library specific imports
 
 
-def create_table(sqlite):
-    """Create table if not exists.
+class SQLite(object):
+    """OpenDACHS SQLite database.
 
-    :param ConfigParser sqlite: SQLite configuration
+    :ivar ConfigParser sqlite: SQLite configuration
     """
-    try:
-        logger = logging.getLogger().getChild(create_table.__name__)
-        connection = sqlite3.connect(
-            sqlite["SQLite"]["database"], detect_types=sqlite3.PARSE_COLNAMES
-        )
-        sql = "CREATE TABLE IF NOT EXISTS {table} ({column_defs})"
-        column_defs = ", ".join(
-            [
-                #: ticket
-                sqlite["SQLite"]["ticket"] + " TEXT PRIMARY KEY",
-                #: e-mail address
-                sqlite["SQLite"]["email"] + " TEXT",
-                #: URL
-                sqlite["SQLite"]["url"] + " TEXT",
-                #: creator(s)
-                sqlite["SQLite"]["creator"] + " TEXT",
-                #: title
-                sqlite["SQLite"]["title"] + " TEXT",
-                #: publisher
-                sqlite["SQLite"]["publisher"] + " TEXT",
-                #: publication year
-                sqlite["SQLite"]["publication_year"] + " TEXT",
-                #: general resource type
-                sqlite["SQLite"]["general_resource_type"] + " TEXT",
-                #: resource type
-                sqlite["SQLite"]["resource_type"] + " TEXT",
-                #: flag
-                sqlite["SQLite"]["flag"] + " TEXT",
-                #: timestamp
-                sqlite["SQLite"]["timestamp"] + " TIMESTAMP",
-                #: WARC filename
-                sqlite["SQLite"]["warc"] + " TEXT"
-            ]
-        )
-        sql = sql.format(
-            table=sqlite["SQLite"]["table"], column_defs=column_defs
-        )
-        connection.execute(sql)
-        connection.commit()
-        connection.close()
-    except Exception:
-        logger.exception("failed to create table")
-        raise SystemExit
-    return
 
+    def __init__(self, sqlite):
+        """Initialize OpenDACHS SQLite database.
 
-def insert(sqlite, parameters):
-    """Insert records.
+        :param ConfigParser sqlite: SQLite configuration
+        """
+        try:
+            logger = logging.getLogger().getChild(self.__init__.__name__)
+            self.sqlite = sqlite
+        except Exception:
+            logger.exception("failed to initialize OpenDACHS SQLite database")
+            raise
+        return
 
-    :param ConfigParser sqlite: SQLite configuration
-    :param list parameters: parameters
-    """
-    try:
-        logger = logging.getLogger().getChild(insert.__name__)
-        connection = sqlite3.connect(
-            sqlite["SQLite"]["database"],
-            detect_types=sqlite3.PARSE_COLNAMES
-        )
-        sql = "INSERT INTO {table} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-        sql = sql.format(table=sqlite["SQLite"]["table"])
-        connection.executemany(sql, parameters)
-        connection.commit()
-        connection.close()
-    except Exception:
-        logger.exception("failed to insert records")
-        raise
-    return
+    def connect(self):
+        """Connect to OpenDACHS SQLite database.
 
+        :returns: connection
+        :rtype: Connection
+        """
+        try:
+            logger = logging.getLogger().getChild(self.connect.__name__)
+            connection = sqlite3.connect(
+                self.sqlite["SQLite"]["database"],
+                detect_types=sqlite3.PARSE_COLNAMES
+            )
+        except Exception:
+            logger.exception("failed to connect to OpenDACHS SQLite database")
+            raise
+        return connection
 
-def update(sqlite, parameters):
-    """Update records.
+    def create_table(self):
+        """Create table if not exists."""
+        try:
+            logger = logging.getLogger().getChild(self.create_table.__name__)
+            connection = self.connect()
+            sql = "CREATE TABLE IF NOT EXISTS {table} ({column_defs})"
+            column_defs = ", ".join(
+                k + " " + v
+                for k, v in self.sqlite["column_defs"].items()
+            )
+            sql = sql.format(
+                table=self.sqlite["SQLite"]["table"], column_defs=column_defs
+            )
+            connection.execute(sql)
+            connection.commit()
+            connection.close()
+        except Exception:
+            logger.exception("failed to create table")
+            raise
+        return
 
-    :param ConfigParser sqlite: SQLite configuration
-    :param list parameters: parameters
-    """
-    raise NotImplementedError
+    def insert(self, parameters):
+        """Insert records.
 
-
-def delete(sqlite, parameters):
-    """Delete records.
-
-    :param ConfigParser sqlite: SQLite configuration
-    :param list parameters: parameters
-    """
-    raise NotImplementedError
-
-
-def execute(sqlite, sql):
-    """Execute queries.
-
-    :param ConfigParser sqlite: SQLite configuration
-    :param dict sql: SQLite queries
-    """
-    try:
-        logger = logging.getLogger().getChild(execute.__name__)
-        for k, v in sql.items():
-            if k == "insert" and len(v):
-                insert(sqlite, v)
-            elif k == "update" and len(v):
-                update(sqlite, v)
-            elif k == "delete" and len(v):
-                delete(sqlite, v)
-    except Exception:
-        logger.exception("failed to execute queries")
-        raise
-    return
+        :param list parameters: parameters
+        """
+        try:
+            logger = logging.getLogger().getChild(self.insert.__name__)
+            connection = self.connect()
+            sql = "INSERT INTO {table} VALUES ({columns})".format(
+                table=self.sqlite["SQLite"]["table"],
+                columns=", ".join(
+                    "?" for _ in range(len(self.sqlite["column_defs"].items()))
+                )
+            )
+            connection.executemany(sql, parameters)
+            connection.commit()
+            connection.close()
+        except Exception:
+            logger.exception("failed to insert records")
+            raise
+        return
