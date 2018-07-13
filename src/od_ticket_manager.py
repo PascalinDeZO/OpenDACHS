@@ -185,7 +185,7 @@ class TicketManager(object):
         """Manage tickets."""
         try:
             logger = logging.getLogger().getChild(
-                self.process_tickets.__name__
+                self.manage_tickets.__name__
             )
             logger.info("manage tickets")
             logger.info("retrieve tickets")
