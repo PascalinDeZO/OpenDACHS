@@ -130,9 +130,9 @@ class TicketManager(object):
                 dest["creator"],                    #: creator(s)
                 dest["title"],                      #: title
                 dest["publisher"],                  #: publisher
-                dest["publication_year"],           #: publication year
-                dest["general_resource_type"],      #: general resource type
-                dest["resource_type"],              #: resource type
+                dest["publicationYear"],            #: publication year
+                dest["generalResourceType"],        #: general resource type
+                dest["resourceType"],               #: resource type
                 dest["flag"],                       #: flag
                 timestamp,                          #: timestamp
                 warc                                #: WARC filename
