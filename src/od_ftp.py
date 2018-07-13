@@ -16,7 +16,7 @@
 
 
 """
-:synopsis: FTP client
+:synopsis: FTP client.
 """
 
 
