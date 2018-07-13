@@ -77,7 +77,7 @@ def main():
         smtp = read_config(args.smtp)
         sqlite = read_config(args.sqlite)
         ticket_manager = src.od_ticket_manager.TicketManager(ftp, smtp, sqlite)
-        ticket_manager.process_tickets()
+        ticket_manager.manage_tickets()
     except Exception:
         logger.exception("an exception was raised")
         raise SystemExit
