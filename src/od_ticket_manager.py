@@ -139,7 +139,7 @@ class TicketManager(object):
             )
             self.sql["insert"].append(parameters)
             self.mails.append(
-                (dest["mail"], src.od_smtp.get_msg(self.smtp, file_))
+                (dest["email"], src.od_smtp.get_msg(self.smtp, file_))
             )
         except Exception:
             logger.exception("failed to insert ticket")
