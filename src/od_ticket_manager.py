@@ -194,9 +194,11 @@ class TicketManager(object):
             logger.info("process tickets")
             for file_ in files:
                 try:
-                    self._process_ticket(file_)
-                except Exception:
-                    logger.warning("failed to process ticket %s", file_)
+                    self.process_ticket(file_)
+                except Exception as exception:
+                    logger.warning(
+                        "failed to process ticket %s\t: %s", file_, exception
+                    )
             src.od_sqlite.execute(self.sqlite, self.sql)
             for k, v in self.sql.items():
                 if k == "insert":
