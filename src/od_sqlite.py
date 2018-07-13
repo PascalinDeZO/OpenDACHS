@@ -41,19 +41,26 @@ def create_table(sqlite):
         sql = "CREATE TABLE IF NOT EXISTS {table} ({column_defs})"
         column_defs = ", ".join(
             [
-                sqlite["SQLite"]["ticket"] + " TEXT PRIMARY KEY",   #: ticket
-                sqlite["SQLite"]["email"] + " TEXT",    #: e-mail address
-                sqlite["SQLite"]["url"] + " TEXT",      #: URL
-                sqlite["SQLite"]["creator"] + " BLOB",  #: creator(s)
-                sqlite["SQLite"]["title"] + " TEXT",    #: title
-                sqlite["SQLite"]["publisher"] + " TEXT",    #: publisher
+                #: ticket
+                sqlite["SQLite"]["ticket"] + " TEXT PRIMARY KEY",
+                #: e-mail address
+                sqlite["SQLite"]["email"] + " TEXT",
+                #: URL
+                sqlite["SQLite"]["url"] + " TEXT",
+                #: creator(s)
+                sqlite["SQLite"]["creator"] + " BLOB",
+                #: title
+                sqlite["SQLite"]["title"] + " TEXT",
+                #: publisher
+                sqlite["SQLite"]["publisher"] + " TEXT",
                 #: publication year
                 sqlite["SQLite"]["publication_year"] + " TEXT",
                 #: general resource type
                 sqlite["SQLite"]["general_resource_type"] + " TEXT",
                 #: resource type
                 sqlite["SQLite"]["resource_type"] + " TEXT",
-                sqlite["SQLite"]["flag"] + " TEXT",         #: flag
+                #: flag
+                sqlite["SQLite"]["flag"] + " TEXT",
                 #: timestamp
                 sqlite["SQLite"]["timestamp"] + " TIMESTAMP",
                 #: WARC filename
@@ -72,24 +79,63 @@ def create_table(sqlite):
     return
 
 
-def insert_rows(sqlite, rows):
-    """Insert rows.
+def insert(sqlite, parameters):
+    """Insert records.
 
     :param ConfigParser sqlite: SQLite configuration
-    :param list rows: rows
+    :param list parameters: parameters
     """
     try:
-        logger = logging.getLogger().getChild(insert_rows.__name__)
+        logger = logging.getLogger().getChild(insert.__name__)
         connection = sqlite3.connect(
             sqlite["SQLite"]["database"],
             detect_types=sqlite3.PARSE_COLNAMES
         )
         sql = "INSERT INTO {table} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         sql = sql.format(table=sqlite["SQLite"]["table"])
-        connection.executemany(sql, rows)
+        connection.executemany(sql, parameters)
         connection.commit()
         connection.close()
     except Exception:
-        logger.exception("failed to insert rows")
+        logger.exception("failed to insert records")
+        raise
+    return
+
+
+def update(sqlite, parameters):
+    """Update records.
+
+    :param ConfigParser sqlite: SQLite configuration
+    :param list parameters: parameters
+    """
+    raise NotImplementedError
+
+
+def delete(sqlite, parameters):
+    """Delete records.
+
+    :param ConfigParser sqlite: SQLite configuration
+    :param list parameters: parameters
+    """
+    raise NotImplementedError
+
+
+def execute(sqlite, sql):
+    """Execute queries.
+
+    :param ConfigParser sqlite: SQLite configuration
+    :param dict sql: SQLite queries
+    """
+    try:
+        logger = logging.getLogger().getChild(execute.__name__)
+        for k, v in sql:
+            if k == "insert":
+                insert(sqlite, v)
+            elif k == "update":
+                update(sqlite, v)
+            elif k == "delete":
+                delete(sqlite, v)
+    except Exception:
+        logger.exception("failed to execute queries")
         raise
     return
