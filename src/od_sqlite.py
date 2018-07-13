@@ -28,7 +28,7 @@ import sqlite3
 # library specific imports
 
 
-class SQLite(object):
+class SQLiteClient(object):
     """OpenDACHS SQLite database.
 
     :ivar ConfigParser sqlite: SQLite configuration
@@ -70,6 +70,10 @@ class SQLite(object):
             logger = logging.getLogger().getChild(self.create_table.__name__)
             connection = self.connect()
             sql = "CREATE TABLE IF NOT EXISTS {table} ({column_defs})"
+            if "ticket" not in self.sqlite["column_defs"]:
+                raise KeyError("'ticket' column is required")
+            if "flag" not in self.sqlite["column_defs"]:
+                raise KeyError("'flag' column is required")
             column_defs = ", ".join(
                 k + " " + v
                 for k, v in self.sqlite["column_defs"].items()
@@ -80,8 +84,8 @@ class SQLite(object):
             connection.execute(sql)
             connection.commit()
             connection.close()
-        except Exception:
-            logger.exception("failed to create table")
+        except Exception as exception:
+            logger.exception("failed to create table\t: %s", exception)
             raise
         return
 
@@ -104,5 +108,47 @@ class SQLite(object):
             connection.close()
         except Exception:
             logger.exception("failed to insert records")
+            raise
+        return
+
+    def update(self, parameters):
+        """Update records.
+
+        :param list parameters: parameters
+        """
+        try:
+            logger = logging.getLogger().getChild(self.update.__name__)
+            connection = self.connect()
+            sql = "UPDATE {table} SET {column0} = '?' WHERE {column1} = ?"
+            sql = sql.format(
+                table=self.sqlite["SQLite"]["table"],
+                column0="flag",
+                column1="ticket"
+            )
+            connection.executemany(sql, parameters)
+            connection.commit()
+            connection.close()
+        except Exception as exception:
+            logger.exception("failed to update records\t: %s", exception)
+            raise
+        return
+
+    def delete(self, parameters):
+        """Delete records.
+
+        :param list parameters: parameters
+        """
+        try:
+            logger = logging.getLogger().getChild(self.delete.__name__)
+            connection = self.connect()
+            sql = "DELETE FROM {table} WHERE {column} = ?".format(
+                table=self.sqlite["SQLite"]["table"],
+                column="ticket"
+            )
+            connection.executemany(sql, parameters)
+            connection.commit()
+            connection.close()
+        except Exception as exception:
+            logger.exception("failed to delete records\t: %s", exception)
             raise
         return
