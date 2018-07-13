@@ -128,12 +128,12 @@ def execute(sqlite, sql):
     """
     try:
         logger = logging.getLogger().getChild(execute.__name__)
-        for k, v in sql:
-            if k == "insert":
+        for k, v in sql.items():
+            if k == "insert" and len(v):
                 insert(sqlite, v)
-            elif k == "update":
+            elif k == "update" and len(v):
                 update(sqlite, v)
-            elif k == "delete":
+            elif k == "delete" and len(v):
                 delete(sqlite, v)
     except Exception:
         logger.exception("failed to execute queries")
