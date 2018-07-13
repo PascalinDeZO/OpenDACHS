@@ -59,6 +59,7 @@ def read_config(file_):
     try:
         logger = logging.getLogger(read_config.__name__)
         config = configparser.ConfigParser()
+        config.optionxform = str
         config.read(file_)
     except Exception:
         logger.exception("failed to read configuration file %s in", file_)
