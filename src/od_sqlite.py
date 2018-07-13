@@ -48,7 +48,7 @@ def create_table(sqlite):
                 #: URL
                 sqlite["SQLite"]["url"] + " TEXT",
                 #: creator(s)
-                sqlite["SQLite"]["creator"] + " BLOB",
+                sqlite["SQLite"]["creator"] + " TEXT",
                 #: title
                 sqlite["SQLite"]["title"] + " TEXT",
                 #: publisher

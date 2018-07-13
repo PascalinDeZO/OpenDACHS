@@ -127,7 +127,7 @@ class TicketManager(object):
                 dest["ticket"],                     #: ticket
                 dest["email"],                      #: e-mail address
                 dest["url"],                        #: URL
-                dest["creator"],                    #: creator(s)
+                json.dumps(dest["creator"]),        #: creator(s)
                 dest["title"],                      #: title
                 dest["publisher"],                  #: publisher
                 dest["publicationYear"],            #: publication year
