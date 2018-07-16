@@ -21,83 +21,107 @@
 
 
 # standard library imports
-import json
 import logging
 import smtplib
 import datetime
+import email.mime.text
+import email.mime.multipart
 
 # third party imports
 # library specific imports
 
 
-def get_header_fields(smtp, file_):
-    """Get header fields.
+def set_header_fields(smtp, ticket, to_addrs, mimemultipart):
+    """Set header fields.
 
     :param ConfigParser smtp: SMTP configuration
-    :param str file_: JSON file
+    :param str ticket: ticket
+    :param str to_addrs: e-mail address recipient
+    :param MIMEMultipart mimemultipart: MIME message
 
-    :returns: header fields
-    :rtype: str
+    :returns: mimemultipart
+    :rtype: MIMEMultipart
     """
     try:
-        logger = logging.getLogger().getChild(get_header_fields.__name__)
-        dest = json.load(open(file_))
+        logger = logging.getLogger().getChild(set_header_fields.__name__)
         now = datetime.datetime.now()
-        date = "Date: {}".format(now.strftime("%d %b %Y %H:%M"))
-        from_ = "From: {}".format(smtp["msg"]["from"])
-        reply_to = "Reply-To: {}".format(smtp["msg"]["reply_to"])
-        to = "To: {}".format(dest["email"])
-        subject = "Subject: {}".format(smtp["msg"]["subject"])
-        header_fields = "\n".join([date, from_, reply_to, to, subject])
+        mimemultipart["Date"] = now.strftime("%d %b %Y %H:%M")
+        mimemultipart["From"] = smtp["header_fields"]["from"]
+        mimemultipart["Reply-To"] = smtp["header_fields"]["reply_to"]
+        mimemultipart["To"] = to_addrs
+        subject = smtp["header_fields"]["subject"] + " {}".format(ticket)
+        mimemultipart["Subject"] = subject
     except Exception:
         logger.exception("failed to get header fields")
         raise
-    return header_fields
+    return mimemultipart
 
 
-def get_body(smtp, file_):
+def get_body(smtp, flag):
     """Get body.
 
     :param ConfigParser smtp: SMTP configuration
-    :param str file_: JSON file
+    :param str flag: flag
 
-    :returns: body
-    :rtype: str
+    :returns: mimetext
+    :rtype: MIMEText
     """
     try:
         logger = logging.getLogger().getChild(get_body.__name__)
-        dest = json.load(open(file_))
-        body = "{}\n{}".format(
-            smtp["body"][dest["flag"]],
-            "\n".join(
-                "{}:\t{}".format(k.capitalize(), v)
-                for k, v in dest.items()
-            )
-        )
+        with open(smtp["body"][flag]) as fp:
+            mimetext = email.mime.text.MIMEText(fp.read())
     except Exception:
         logger.exception("failed to get body")
         raise
-    return body
+    return mimetext
 
 
-def get_msg(smtp, file_):
+def get_attachment(ticket, attachment):
+    """Get attachment.
+
+    :param str ticket: ticket
+    :param str attachment: attachment
+
+    :returns: mimetext
+    :rtype: MIMEText
+    """
+    try:
+        logger = logging.getLogger().getChild(get_attachment.__name__)
+        mimetext = email.mime.text.MIMEText(attachment)
+        filename = "{}.txt".format(ticket)
+        mimetext.add_header(
+            "Content-Disposition", attachment, filename=filename
+        )
+    except Exception:
+        logger.exception("failed to get attachment")
+        raise
+    return mimetext
+
+
+def get_msg(smtp, ticket, to_addrs, flag, attachment=""):
     """Get e-mail.
 
     :param ConfigParser smtp: SMTP configuration
-    :param str file_: JSON file
+    :param str ticket: ticket
+    :param str to_addrs: e-mail address recipient
+    :param str flag: flag
 
-    :returns: msg
-    :rtype: str
+    :returns: mimemultipart
+    :rtype: MIMEMultipart
     """
     try:
         logger = logging.getLogger().getChild(get_msg.__name__)
-        header_fields = get_header_fields(smtp, file_)
-        body = get_body(smtp, file_)
-        msg = "{}\n{}".format(header_fields, body)
+        mimemultipart = email.mime.multipart.MIMEMultipart()
+        mimemultipart = set_header_fields(
+            smtp, ticket, to_addrs, mimemultipart
+        )
+        mimemultipart.attach(get_body(smtp, flag))
+        if attachment:
+            mimemultipart.attach(get_attachment(ticket, attachment))
     except Exception:
-        logger.exception("failed to get mail")
+        logger.exception("failed to get e-mail")
         raise
-    return msg
+    return mimemultipart
 
 
 def sendmails(smtp, mails):
@@ -113,7 +137,9 @@ def sendmails(smtp, mails):
             port=smtp["SMTP"]["port"]
         )
         for to_addrs, msg in mails:
-            smtp_client.sendmail(smtp["msg"]["from"], to_addrs, msg)
+            smtp_client.sendmail(
+                smtp["header_fields"]["from"], to_addrs, msg.as_string()
+            )
     except Exception:
         logger.exception("failed to send mails")
         raise
