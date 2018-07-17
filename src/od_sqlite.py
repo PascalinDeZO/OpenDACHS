@@ -114,7 +114,7 @@ class SQLiteClient(object):
             raise
         return
 
-    def select(self, parameters):
+    def select(self, parameters=()):
         """Select record.
 
         :param tuple parameters: parameters
@@ -125,17 +125,24 @@ class SQLiteClient(object):
         try:
             logger = logging.getLogger().getChild(self.select.__name__)
             connection = self.connect()
-            sql = "SELECT * FROM {table} WHERE {column} = ?".format(
-                table=self.sqlite["SQLite"]["table"],
-                column="ticket"
-            )
-            records = list(connection.execute(sql, parameters))
-            assert len(records) <= 1, "non-unique primary key"
-            record = dict(records[0]) if len(records) == 1 else {}
+            if parameters:
+                sql = "SELECT * FROM {table} WHERE {column} = ?".format(
+                    table=self.sqlite["SQLite"]["table"],
+                    column="ticket"
+                )
+                cursor = connection.execute(sql, parameters)
+            else:
+                sql = "SELECT * FROM {table}".format(
+                    table=self.sqlite["SQLite"]["table"]
+                )
+                cursor = connection.execute(sql)
+            records = [
+                dict(record) for record in cursor
+            ]
         except Exception:
             logger.exception("failed to select record")
             raise
-        return record
+        return records
 
     def update(self, parameters):
         """Update records.
@@ -176,5 +183,25 @@ class SQLiteClient(object):
             connection.close()
         except Exception as exception:
             logger.exception("failed to delete records\t: %s", exception)
+            raise
+        return
+
+    def execute(self, sql, parameters):
+        """Execute query.
+
+        :param str sql: query
+        :param tuple parameters: parameters
+
+        :returns: cursor
+        :rtype: Cursor
+        """
+        try:
+            logger = logging.getLogger().getChild(self.execute.__name__)
+            connection = self.connect()
+            cursor = connection.execute(sql, parameters)
+            connection.commit()
+            connection.close()
+        except Exception as exception:
+            logger.exception("failed to execute query\t: %s", exception)
             raise
         return
