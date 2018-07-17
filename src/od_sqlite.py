@@ -59,6 +59,7 @@ class SQLiteClient(object):
                 self.sqlite["SQLite"]["database"],
                 detect_types=sqlite3.PARSE_COLNAMES
             )
+            connection.row_factory = sqlite3.Row
         except Exception:
             logger.exception("failed to connect to OpenDACHS SQLite database")
             raise
@@ -72,6 +73,8 @@ class SQLiteClient(object):
             sql = "CREATE TABLE IF NOT EXISTS {table} ({column_defs})"
             if "ticket" not in self.sqlite["column_defs"]:
                 raise KeyError("'ticket' column is required")
+            if "email" not in self.sqlite["column_defs"]:
+                raise KeyError("'email' column is required")
             if "flag" not in self.sqlite["column_defs"]:
                 raise KeyError("'flag' column is required")
             column_defs = ", ".join(
@@ -114,7 +117,7 @@ class SQLiteClient(object):
     def select(self, parameters):
         """Select record.
 
-        :param list parameters: parameters
+        :param tuple parameters: parameters
 
         :returns: record
         :rtype: dict
@@ -126,13 +129,13 @@ class SQLiteClient(object):
                 table=self.sqlite["SQLite"]["table"],
                 column="ticket"
             )
-            records = connection.execute(sql, parameters)
+            records = list(connection.execute(sql, parameters))
             assert len(records) <= 1, "non-unique primary key"
-            record = records[0] if len(records) == 1 else {}
+            record = dict(records[0]) if len(records) == 1 else {}
         except Exception:
             logger.exception("failed to select record")
             raise
-        return {k: record[i] for i, k in enumerate(self.sqlite.keys())}
+        return record
 
     def update(self, parameters):
         """Update records.
@@ -142,7 +145,7 @@ class SQLiteClient(object):
         try:
             logger = logging.getLogger().getChild(self.update.__name__)
             connection = self.connect()
-            sql = "UPDATE {table} SET {column0} = '?' WHERE {column1} = ?"
+            sql = "UPDATE {table} SET {column0} = ? WHERE {column1} = ?"
             sql = sql.format(
                 table=self.sqlite["SQLite"]["table"],
                 column0="flag",
