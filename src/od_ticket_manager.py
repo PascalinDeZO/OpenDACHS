@@ -38,7 +38,8 @@ import src.od_sqlite
 class TicketManager(object):
     """Ticket manager.
 
-    :cvar str WARCS_DIR: WARCs output directory
+    :cvar str TMP_WARCS_DIR: temporary WARCs output directory
+    :cvar str PERMANENT_WARCS_DIR: permanent WARCs output directory
     :cvar str TEMPLATES_DIR: e-mail templates directory
     :cvar dict TEMPLATES: e-mail templates
 
@@ -46,13 +47,15 @@ class TicketManager(object):
     :ivar ConfigParser smtp: SMTP configuration
     :ivar SQLiteClient sqlite_client: OpenDACHS SQLite database client
     """
-    WARCS_DIR = "tmp/warc"
+    TMP_WARCS_DIR = "tmp/warcs"
+    PERMANENT_WARCS_DIR = "permanent/warcs"
     TEMPLATES_DIR = "templates"
     TEMPLATES = {
         "submitted": TEMPLATES_DIR + "/submitted.txt",
         "confirmed": TEMPLATES_DIR + "/confirmed.txt",
         "accepted": TEMPLATES_DIR + "/accepted.txt",
         "denied": TEMPLATES_DIR + "/denied.txt"
+        "expired": TEMPLATES_DIR + "/expired.txt"
     }
 
     def __init__(self, ftp, smtp, sqlite):
@@ -68,7 +71,8 @@ class TicketManager(object):
             self.smtp = smtp
             self.sqlite_client = src.od_sqlite.SQLiteClient(sqlite)
             self.sqlite_client.create_table()
-            os.makedirs(self.WARCS_DIR, exist_ok=True)
+            os.makedirs(self.TMP_WARCS_DIR, exist_ok=True)
+            os.makedirs(self.PERMANENT_WARCS_DIR, exist_ok=True)
         except Exception:
             logger.exception("failed to initialize ticket management")
             raise
@@ -88,6 +92,11 @@ class TicketManager(object):
                 template = fp.read()
             if record["flag"] == "submitted" or record["flag"] == "confirmed":
                 body = template.format(ticket=record["ticket"])
+            elif record["flag"] == "accepted" or record["flag"] == "denied":
+                body = template.format(
+                    ticket=record["ticket"],
+                    reply_to=self.smtp["header_fields"]["reply_to"]
+                )
         except Exception:
             logger.exception("failed to get body")
             raise
@@ -131,7 +140,7 @@ class TicketManager(object):
             else:
                 raise RuntimeError("unexpected  flag '%s'", dest["flag"])
             timestamp = datetime.datetime.now()
-            warc = "{}/{}.warc".format(self.WARCS_DIR, dest["ticket"])
+            warc = "{}/{}.warc".format(self.TMP_WARCS_DIR, dest["ticket"])
             src.od_warc.write_warc(dest["url"], warc)
             parameters = []
             for k in self.sqlite_client.sqlite["column_defs"].keys():
@@ -167,7 +176,7 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(self.confirm_ticket.__name__)
             dest = json.load(open(file_))
             parameters = (dest["ticket"],)
-            record = self.sqlite_client.select(parameters)
+            record = self.sqlite_client.select(parameters)[0]
             if record:
                 if record["flag"] != "submitted":
                     logger.warning("unexpected flag '%s'", record["flag"])
@@ -196,6 +205,81 @@ class TicketManager(object):
             raise
         return
 
+    def accept_ticket(self, file_):
+        """Accept ticket.
+
+        :param str file_: local file
+        """
+        try:
+            logger = logging.getLogger().getChild(self.accept_ticket.__name__)
+            dest = json.load(open(file_))
+            parameters = (dest["ticket"],)
+            record = self.sqlite_client.select(parameters)[0]
+            if record:
+                if record["flag"] != "confirmed":
+                    logger.warning("unexpected flag '%s'", record["flag"])
+                else:
+                    warc = record["warc"].rsplit("/")[-1]
+                    dst = "{}/{}".format(self.PERMANENT_WARCS_DIR, warc)
+                    os.rename(record["warc"], dst)
+                    logger.info(
+                        "moved WARC %s to permanent WARC output directory",
+                        warc
+                    )
+                    self.sqlite_client.delete([parameters])
+                    logger.info("deleted ticket %s", dest["ticket"])
+                    body = self._get_body(dest)
+                    subject = "Your OpenDACHS request " + dest["ticket"]
+                    msg = src.od_smtp.get_msg(
+                        self.smtp, record["email"], subject, body
+                    )
+                    src.od_smtp.sendmail(
+                        self.smtp, record["email"], msg
+                    )
+            else:
+                raise RuntimeError("unknown ticket %s", dest["ticket"])
+        except Exception as exception:
+            logger.exception("failed to accept ticket\t: %s", exception)
+            raise
+        return
+
+    def deny_ticket(self, file_):
+        """Deny ticket.
+
+        :param str file_: local file
+        """
+        try:
+            logger = logging.getLogger().getChild(self.deny_ticket.__name__)
+            dest = json.load(open(file_))
+            parameters = (dest["ticket"],)
+            record = self.sqlite_client.select(parameters)[0]
+            if record:
+                if record["flag"] != "confirmed":
+                    logger.warning("unexpected flag '%s'", record["flag"])
+                else:
+                    os.unlink(record["warc"])
+                    warc = record["warc"].rsplit("/")[-1]
+                    logger.info(
+                        "removed WARC %s from temporary WARC output directory",
+                        warc
+                    )
+                    self.sqlite_client.delete([parameters])
+                    logger.info("deleted ticket %s", dest["ticket"])
+                    body = self._get_body(dest)
+                    subject = "Your OpenDACHS request " + dest["ticket"]
+                    msg = src.od_smtp.get_msg(
+                        self.smtp, record["email"], subject, body
+                    )
+                    src.od_smtp.sendmail(
+                        self.smtp, record["email"], msg
+                    )
+            else:
+                raise RuntimeError("unknown ticket %s", dest["ticket"])
+        except Exception as exception:
+            logger.exception("failed to deny ticket\t: %s", exception)
+            raise
+        return
+
     def manage_ticket(self, file_):
         """Manage ticket.
 
@@ -214,6 +298,12 @@ class TicketManager(object):
             elif dest["flag"] == "confirmed":
                 self.confirm_ticket(file_)
                 managed_ticket[1] += 1
+            elif dest["flag"] == "accepted":
+                self.accept_ticket(file_)
+                managed_ticket[2] += 1
+            elif dest["flag"] == "denied":
+                self.deny_ticket(file_)
+                managed_ticket[3] += 1
         except Exception:
             logger.exception("failed to manage ticket %s", dest["ticket"])
             raise
@@ -242,10 +332,12 @@ class TicketManager(object):
                     ]
                 except Exception as exception:
                     logger.warning("failed to manage ticket\t: %s", exception)
+            managed_tickets.append(self.remove_expired(self))
             logger.info("submitted %d new tickets", managed_tickets[0])
             logger.info("confirmed %d tickets", managed_tickets[1])
             logger.info("accepted %d tickets", managed_tickets[2])
             logger.info("denied %d tickets", managed_tickets[3])
+            logger.info("removed %d expired tickets", managed_tickets[4])
         except Exception:
             logger.exception("failed to prcocess files")
             raise
