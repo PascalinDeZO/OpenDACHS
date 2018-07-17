@@ -21,36 +21,39 @@
 
 
 # standard library imports
-import io
 import os
 import json
 import logging
 import datetime
 
 # third party imports
-import requests
-import warcio
 
 # library specific imports
 import src.od_ftp
 import src.od_smtp
+import src.od_warc
 import src.od_sqlite
 
 
 class TicketManager(object):
     """Ticket manager.
 
-    :cvar str DIR: output directory
-    :cvar str LOCAL_FILES_DIR: local files output directory
     :cvar str WARCS_DIR: WARCs output directory
+    :cvar str TEMPLATES_DIR: e-mail templates directory
+    :cvar dict TEMPLATES: e-mail templates
 
     :ivar ConfigParser ftp: FTP configuration
     :ivar ConfigParser smtp: SMTP configuration
     :ivar SQLiteClient sqlite_client: OpenDACHS SQLite database client
-    :ivar dict queue: ticket queue
     """
-    DIR = "tmp"
-    WARCS_DIR = "{}/warc".format(DIR)
+    WARCS_DIR = "tmp/warc"
+    TEMPLATES_DIR = "templates"
+    TEMPLATES = {
+        "submitted": TEMPLATES_DIR + "/submitted.txt",
+        "confirmed": TEMPLATES_DIR + "/confirmed.txt",
+        "accepted": TEMPLATES_DIR + "/accepted.txt",
+        "denied": TEMPLATES_DIR + "/denied.txt"
+    }
 
     def __init__(self, ftp, smtp, sqlite):
         """Initialize ticket management.
@@ -64,9 +67,6 @@ class TicketManager(object):
             self.ftp = ftp
             self.smtp = smtp
             self.sqlite_client = src.od_sqlite.SQLiteClient(sqlite)
-            self.queue = {
-                "submit": [], "confirm": [], "accept": [], "deny": []
-            }
             self.sqlite_client.create_table()
             os.makedirs(self.WARCS_DIR, exist_ok=True)
         except Exception:
@@ -74,46 +74,49 @@ class TicketManager(object):
             raise
         return
 
-    def write_warc(self, file_):
-        """Write WARC.
+    def _get_body(self, record):
+        """Get body.
 
-        :param str file_: local file
+        :param dict record: record
 
-        :returns: WARC filename
+        :returns: body
         :rtype: str
         """
         try:
-            logger = logging.getLogger().getChild(self.write_warc.__name__)
-            dest = json.load(open(file_))
-            warc = "{}/{}.warc".format(self.WARCS_DIR, dest["ticket"])
-            fp = open(warc, mode="wb")
-            writer = warcio.warcwriter.WARCWriter(fp, gzip=True)
-            logger.info("send GET request {}".format(dest["url"]))
-            response = requests.get(dest["url"])
-            if response.status_code != 200:
-                raise RuntimeError(
-                    "{}:\tHTTP status code {}".format(
-                        dest["url"], response.status_code
-                    )
-                )
-            else:
-                headers = response.raw.headers.items()
-                status_line = "200 OK"
-                protocol = "HTTP/1.x"
-                status_and_headers = warcio.statusandheaders.StatusAndHeaders(
-                    status_line, headers, protocol=protocol
-                )
-                warc_record = writer.create_warc_record(
-                    dest["url"],
-                    "response",
-                    payload=io.BytesIO(response.content),
-                    http_headers=status_and_headers
-                )
-                writer.write_record(warc_record)
+            logger = logging.getLogger().getChild(self._get_body.__name__)
+            with open(self.TEMPLATES[record["flag"]]) as fp:
+                template = fp.read()
+            if record["flag"] == "submitted":
+                body = template.format(ticket=record["ticket"])
         except Exception:
-            logger.exception("failed to write WARC %s", dest["ticket"])
+            logger.exception("failed to get body")
             raise
-        return warc
+        return body
+
+    def _get_attachment(self, record):
+        """Get attachment.
+
+        :param dict record: record
+
+        :returns: attachment
+        :rtype: str
+        """
+        try:
+            logger = logging.getLogger().getChild(
+                self._get_attachment.__name__
+            )
+            attachment = ""
+            for k, v in record.items():
+                if k not in ["email", "flag", "timestamp", "warc"]:
+                    if k == "creator":
+                        creator = ", ".join(v)
+                        attachment += "{}\t: {}\n".format(creator, v)
+                    else:
+                        attachment += "{}\t: {}\n".format(k, v)
+        except Exception:
+            logger.exception("failed to get attachment")
+            raise
+        return attachment
 
     def submit_ticket(self, file_):
         """Submit ticket.
@@ -123,6 +126,13 @@ class TicketManager(object):
         try:
             logger = logging.getLogger().getChild(self.submit_ticket.__name__)
             dest = json.load(open(file_))
+            if dest["flag"] == "pending":
+                dest["flag"] = "submitted"
+            else:
+                raise RuntimeError("unexpected  flag '%s'", dest["flag"])
+            timestamp = datetime.datetime.now()
+            warc = "{}/{}.warc".format(self.WARCS_DIR, dest["ticket"])
+            src.od_warc.write_warc(dest["url"], warc)
             parameters = []
             for k in self.sqlite_client.sqlite["column_defs"].keys():
                 if k not in ["timestamp", "warc"]:
@@ -131,33 +141,51 @@ class TicketManager(object):
                     else:
                         parameters.append(dest[k])
                 elif k == "timestamp":
-                    parameters.append(datetime.datetime.now())
+                    parameters.append(timestamp)
                 elif k == "warc":
-                    parameters.append(self.write_warc(file_))
+                    parameters.append(warc)
             parameters = tuple(parameters)
-            mail = (dest["email"], src.od_smtp.get_msg(self.smtp, file_))
-            self.queue["submit"].append((mail, parameters))
-        except Exception:
-            logger.exception("failed to submit ticket")
+            subject = "Your OpenDACHS request " + dest["ticket"]
+            body = self._get_body(dest)
+            attachment = self._get_attachment(dest)
+            msg = src.od_smtp.get_msg(
+                self.smtp, dest["email"], subject, body, attachment=attachment
+            )
+            self.sqlite_client.insert([parameters])
+            src.od_smtp.sendmail(self.smtp, dest["email"], msg)
+        except Exception as exception:
+            logger.exception("failed to submit ticket\t: %s", exception)
             raise
         return
+
+    def confirm_ticket(self, file_):
+        """Confirm ticket.
+
+        :param str file_: local file
+        """
+        raise NotImplementedError
 
     def manage_ticket(self, file_):
         """Manage ticket.
 
         :param str file_: local file
+
+        :returns: managed_ticket
+        :rtype: list
         """
         try:
             logger = logging.getLogger().getChild(self.manage_ticket.__name__)
+            managed_ticket = [0, 0, 0, 0]
             dest = json.load(open(file_))
             if dest["flag"] == "pending":
                 self.submit_ticket(file_)
+                managed_ticket[0] += 1
         except Exception:
             logger.exception("failed to manage ticket %s", dest["ticket"])
             raise
         finally:
             os.unlink(file_)
-        return
+        return managed_ticket
 
     def manage_tickets(self):
         """Manage tickets."""
@@ -170,26 +198,20 @@ class TicketManager(object):
             files = src.od_ftp.retrieve_files(self.ftp)
             logger.info("retrieved %d tickets", len(files))
             logger.info("process tickets")
+            managed_tickets = [0, 0, 0, 0]
             for file_ in files:
                 try:
-                    self.manage_ticket(file_)
+                    managed_tickets = [
+                        x + y
+                        for x, y in
+                        zip(managed_tickets, self.manage_ticket(file_))
+                    ]
                 except Exception as exception:
                     logger.warning("failed to manage ticket\t: %s", exception)
-            self.sqlite_client.insert(
-                [record for _, record in self.queue["submit"]]
-            )
-            src.od_smtp.sendmails(
-                self.smtp, [mail for mail, _ in self.queue["submit"]]
-            )
-            for k, v in self.queue.items():
-                if k == "submit":
-                    logger.info("submitted %d new tickets", len(v))
-                elif k == "confirm":
-                    logger.info("confirmed %d tickets", len(v))
-                elif k == "accept":
-                    logger.info("accepted %d tickets", len(v))
-                elif k == "deny":
-                    logger.info("denied %d tickets", len(v))
+            logger.info("submitted %d new tickets", managed_tickets[0])
+            logger.info("confirmed %d tickets", managed_tickets[1])
+            logger.info("accepted %d tickets", managed_tickets[2])
+            logger.info("denied %d tickets", managed_tickets[3])
         except Exception:
             logger.exception("failed to prcocess files")
             raise
