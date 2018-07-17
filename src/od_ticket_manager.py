@@ -86,7 +86,7 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(self._get_body.__name__)
             with open(self.TEMPLATES[record["flag"]]) as fp:
                 template = fp.read()
-            if record["flag"] == "submitted":
+            if record["flag"] == "submitted" or record["flag"] == "confirmed":
                 body = template.format(ticket=record["ticket"])
         except Exception:
             logger.exception("failed to get body")
@@ -163,7 +163,38 @@ class TicketManager(object):
 
         :param str file_: local file
         """
-        raise NotImplementedError
+        try:
+            logger = logging.getLogger().getChild(self.confirm_ticket.__name__)
+            dest = json.load(open(file_))
+            parameters = (dest["ticket"],)
+            record = self.sqlite_client.select(parameters)
+            if record:
+                if record["flag"] != "submitted":
+                    logger.warning("unexpected flag '%s'", record["flag"])
+                else:
+                    parameters = (dest["flag"], dest["ticket"])
+                    self.sqlite_client.update([parameters])
+                    body = self._get_body(dest)
+                    subject = "OpenDACHS request " + dest["ticket"]
+                    attachment = self._get_attachment(record)
+                    msg = src.od_smtp.get_msg(
+                        self.smtp,
+                        self.smtp["header_fields"]["reply_to"],
+                        subject,
+                        body,
+                        attachment=attachment
+                    )
+                    src.od_smtp.sendmail(
+                        self.smtp,
+                        self.smtp["header_fields"]["reply_to"],
+                        msg
+                    )
+            else:
+                raise RuntimeError("unknown ticket %s", dest["ticket"])
+        except Exception as exception:
+            logger.exception("failed to confirm ticket\t: %s", exception)
+            raise
+        return
 
     def manage_ticket(self, file_):
         """Manage ticket.
@@ -180,6 +211,9 @@ class TicketManager(object):
             if dest["flag"] == "pending":
                 self.submit_ticket(file_)
                 managed_ticket[0] += 1
+            elif dest["flag"] == "confirmed":
+                self.confirm_ticket(file_)
+                managed_ticket[1] += 1
         except Exception:
             logger.exception("failed to manage ticket %s", dest["ticket"])
             raise
