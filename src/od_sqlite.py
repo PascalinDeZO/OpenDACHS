@@ -111,6 +111,29 @@ class SQLiteClient(object):
             raise
         return
 
+    def select(self, parameters):
+        """Select record.
+
+        :param list parameters: parameters
+
+        :returns: record
+        :rtype: dict
+        """
+        try:
+            logger = logging.getLogger().getChild(self.select.__name__)
+            connection = self.connect()
+            sql = "SELECT * FROM {table} WHERE {column} = ?".format(
+                table=self.sqlite["SQLite"]["table"],
+                column="ticket"
+            )
+            records = connection.execute(sql, parameters)
+            assert len(records) <= 1, "non-unique primary key"
+            record = records[0] if len(records) == 1 else {}
+        except Exception:
+            logger.exception("failed to select record")
+            raise
+        return {k: record[i] for i, k in enumerate(self.sqlite.keys())}
+
     def update(self, parameters):
         """Update records.
 
