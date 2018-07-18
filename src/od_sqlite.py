@@ -71,12 +71,6 @@ class SQLiteClient(object):
             logger = logging.getLogger().getChild(self.create_table.__name__)
             connection = self.connect()
             sql = "CREATE TABLE IF NOT EXISTS {table} ({column_defs})"
-            if "ticket" not in self.sqlite["column_defs"]:
-                raise KeyError("'ticket' column is required")
-            if "email" not in self.sqlite["column_defs"]:
-                raise KeyError("'email' column is required")
-            if "flag" not in self.sqlite["column_defs"]:
-                raise KeyError("'flag' column is required")
             column_defs = ", ".join(
                 k + " " + v
                 for k, v in self.sqlite["column_defs"].items()
@@ -204,4 +198,4 @@ class SQLiteClient(object):
         except Exception as exception:
             logger.exception("failed to execute query\t: %s", exception)
             raise
-        return
+        return cursor
