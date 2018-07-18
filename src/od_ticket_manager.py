@@ -54,7 +54,7 @@ class TicketManager(object):
         "submitted": TEMPLATES_DIR + "/submitted.txt",
         "confirmed": TEMPLATES_DIR + "/confirmed.txt",
         "accepted": TEMPLATES_DIR + "/accepted.txt",
-        "denied": TEMPLATES_DIR + "/denied.txt"
+        "denied": TEMPLATES_DIR + "/denied.txt",
         "expired": TEMPLATES_DIR + "/expired.txt"
     }
 
@@ -102,6 +102,70 @@ class TicketManager(object):
             raise
         return body
 
+    def _get_plaintext(self, record):
+        """Get plaintext attachment.
+
+        :param dict record: record
+
+        :returns: plaintext attachment
+        :rtype: str
+        """
+        try:
+            logger = logging.getLogger().getChild(self._get_plaintext.__name__)
+            attachment = "OPENDACHS REQUEST INFORMATION:\n{}\n".format(
+                "\n".join(
+                    "{}\t: {}".format(k.title(), v)
+                    for k, v in record.items() if k != "entry"
+                )
+            )
+            attachment += "RESOURCE INFORMATION:\n{}\n".format(
+                "\n".join(
+                    "{}\t: {}".format(k, v)
+                    for k, v in record["entry"].items() if k != "creator"
+                )
+            )
+            attachment += "creator(s)\t: {}".format(
+                ", ".join(record["entry"]["creator"])
+            )
+        except Exception:
+            logger.exception("failed to get plaintext attachment")
+            raise
+        return attachment
+
+    def _get_ris(self, record):
+        """Get RIS attachment.
+
+        :param dict record: record
+
+        :returns: RIS attachment
+        :rtype: str
+        """
+        try:
+            logger = logging.getLogger().getChild(self._get_ris.__name__)
+            tags = {
+                "resourceType": "TY",
+                "title": "TI",
+                "publisher": "PB",
+                "publicationYear": "PY",
+                "creator": "AU",
+                "url": "UR"
+            }
+            tag = "{tag}\u0020\u0020-\u0020{value}\u000A"
+            attachment = tag.format(
+                tag="TY", value=record["entry"]["resourceType"]
+            )
+            for k, v in record["entry"].items():
+                if k not in ["generalResourceType", "resourceType", "creator"]:
+                    attachment += tag.format(tag=tags[k], value=v)
+                elif k == "creator":
+                    for creator in v:
+                        attachment += tag.format(tag=tags[k], value=creator)
+            attachment += tag.format(tag="ER", value="")
+        except Exception:
+            logger.exception("failed to get RIS attachment")
+            raise
+        return attachment
+
     def _get_attachment(self, record):
         """Get attachment.
 
@@ -114,14 +178,10 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(
                 self._get_attachment.__name__
             )
-            attachment = ""
-            for k, v in record.items():
-                if k not in ["email", "flag", "timestamp", "warc"]:
-                    if k == "creator":
-                        creator = ", ".join(v)
-                        attachment += "{}\t: {}\n".format(creator, v)
-                    else:
-                        attachment += "{}\t: {}\n".format(k, v)
+            if record["flag"] == "submitted" or record["flag"] == "confirmed":
+                attachment = self._get_plaintext(record)
+            elif record["flag"] == "accepted":
+                attachment = self._get_ris(record)
         except Exception:
             logger.exception("failed to get attachment")
             raise
@@ -145,8 +205,12 @@ class TicketManager(object):
             parameters = []
             for k in self.sqlite_client.sqlite["column_defs"].keys():
                 if k not in ["timestamp", "warc"]:
-                    if k == "creator":
-                        parameters.append(json.dumps(dest[k]))
+                    if k == "entry":
+                        entry = {
+                            k: v for k, v in dest.items()
+                            if k not in ["ticket", "email", "flag"]
+                        }
+                        parameters.append(json.dumps(entry))
                     else:
                         parameters.append(dest[k])
                 elif k == "timestamp":
@@ -156,7 +220,12 @@ class TicketManager(object):
             parameters = tuple(parameters)
             subject = "Your OpenDACHS request " + dest["ticket"]
             body = self._get_body(dest)
-            attachment = self._get_attachment(dest)
+            tmp = {
+                k: v for k, v in dest.items()
+                if k in ["ticket", "email", "flag", "timestamp", "warc"]
+            }
+            tmp["entry"] = entry
+            attachment = self._get_attachment(tmp)
             msg = src.od_smtp.get_msg(
                 self.smtp, dest["email"], subject, body, attachment=attachment
             )
@@ -185,7 +254,9 @@ class TicketManager(object):
                     self.sqlite_client.update([parameters])
                     body = self._get_body(dest)
                     subject = "OpenDACHS request " + dest["ticket"]
-                    attachment = self._get_attachment(record)
+                    tmp = {k: v for k, v in record.items() if k != "entry"}
+                    tmp["entry"] = json.loads(record["entry"])
+                    attachment = self._get_attachment(tmp)
                     msg = src.od_smtp.get_msg(
                         self.smtp,
                         self.smtp["header_fields"]["reply_to"],
@@ -230,8 +301,16 @@ class TicketManager(object):
                     logger.info("deleted ticket %s", dest["ticket"])
                     body = self._get_body(dest)
                     subject = "Your OpenDACHS request " + dest["ticket"]
+                    tmp = {
+                        k: v for k, v in record.items()
+                        if k != "flag" and k != "entry"
+                    }
+                    tmp["flag"] = "accepted"
+                    tmp["entry"] = json.loads(record["entry"])
+                    attachment = self._get_attachment(tmp)
                     msg = src.od_smtp.get_msg(
-                        self.smtp, record["email"], subject, body
+                        self.smtp, record["email"], subject, body,
+                        attachment=attachment, format_="ris"
                     )
                     src.od_smtp.sendmail(
                         self.smtp, record["email"], msg
@@ -311,6 +390,14 @@ class TicketManager(object):
             os.unlink(file_)
         return managed_ticket
 
+    def remove_expired(self):
+        """Remove expired tickets.
+
+        :returns: number of expired tickets
+        :rtype: int
+        """
+        return 0
+
     def manage_tickets(self):
         """Manage tickets."""
         try:
@@ -332,7 +419,7 @@ class TicketManager(object):
                     ]
                 except Exception as exception:
                     logger.warning("failed to manage ticket\t: %s", exception)
-            managed_tickets.append(self.remove_expired(self))
+            managed_tickets.append(self.remove_expired())
             logger.info("submitted %d new tickets", managed_tickets[0])
             logger.info("confirmed %d tickets", managed_tickets[1])
             logger.info("accepted %d tickets", managed_tickets[2])
