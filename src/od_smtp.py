@@ -73,7 +73,7 @@ def get_body(body):
     return mimetext
 
 
-def get_attachment(attachment):
+def get_attachment(attachment, format_):
     """Get attachment.
 
     :param str attachment: attachment
@@ -83,9 +83,10 @@ def get_attachment(attachment):
     """
     try:
         logger = logging.getLogger().getChild(get_attachment.__name__)
+        filename = "AT.{}".format(format_)
         mimetext = email.mime.text.MIMEText(attachment)
         mimetext.add_header(
-            "Content-Disposition", attachment, filename="info.txt"
+            "Content-Disposition", "attachment", filename=filename
         )
     except Exception:
         logger.exception("failed to get attachment")
@@ -93,7 +94,7 @@ def get_attachment(attachment):
     return mimetext
 
 
-def get_msg(smtp, to_addrs, subject, body, attachment=""):
+def get_msg(smtp, to_addrs, subject, body, attachment="", format_="txt"):
     """Get e-mail.
 
     :param ConfigParser smtp: SMTP configuration
@@ -113,7 +114,7 @@ def get_msg(smtp, to_addrs, subject, body, attachment=""):
         )
         mimemultipart.attach(get_body(body))
         if attachment:
-            mimemultipart.attach(get_attachment(attachment))
+            mimemultipart.attach(get_attachment(attachment, format_=format_))
     except Exception:
         logger.exception("failed to get e-mail")
         raise
