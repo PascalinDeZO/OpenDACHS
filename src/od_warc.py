@@ -37,6 +37,7 @@ def write_warc(url, warc):
     :param str URL: URL
     :param str warc: WARC filename
     """
+    #: https://pypi.org/project/warcio/
     try:
         logger = logging.getLogger().getChild(write_warc.__name__)
         fp = open(warc, mode="wb")
