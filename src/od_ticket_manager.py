@@ -22,7 +22,10 @@
 
 # standard library imports
 import os
+import re
 import json
+import base64
+import string
 import logging
 import datetime
 
@@ -33,6 +36,7 @@ import src.od_ftp
 import src.od_smtp
 import src.od_warc
 import src.od_sqlite
+import src.od_api
 
 
 class TicketManager(object):
@@ -78,6 +82,20 @@ class TicketManager(object):
             raise
         return
 
+    #: https://stackoverflow.com/questions/3854692/generate-password-in-python
+    @staticmethod
+    def _generate_password(length=16):
+        """Generate password.
+
+        :param int length: length
+        """
+        alphabet = string.ascii_letters + string.digits
+        password = "".join(
+            alphabet[ord(char) % len(alphabet)]
+            for char in base64.b64encode(os.urandom(length)).decode()
+        )
+        return password
+
     def _get_body(self, record):
         """Get body.
 
@@ -102,10 +120,95 @@ class TicketManager(object):
             raise
         return body
 
-    def _get_plaintext(self, record):
+    @staticmethod
+    def _get_opendachs_information(raw):
+        """Get OpenDACHS information.
+
+        :param dict raw: raw data
+
+        :returns: OpenDACHS information
+        :rtype: str
+        """
+        opendachs_information = ""
+        for key, value in sorted(list(raw.items()), key=lambda x: x[0]):
+            if key not in ["email", "url", "ticket"]:
+                continue
+            else:
+                if key == "email":
+                    info = "E-Mail\t: {}\n"
+                elif key == "url":
+                    info = "URL\t: {}\n"
+                else:
+                    info = "{}\t: {{}}\n".format(key.title())
+                opendachs_information += info.format(value)
+        return opendachs_information
+
+    @staticmethod
+    def _get_resource_information(raw):
+        """Get resource information.
+
+        :param dict raw: raw data
+
+        :returns: resource information
+        :rtype: str
+        """
+        resource_information = ""
+        for key, value in sorted(list(raw.items()), key=lambda x: x[0]):
+            if key in ["email", "url", "ticket", "flag"]:
+                continue
+            elif key == "creator":
+                for creator in value:
+                    resource_information += "Creator(s):\n"
+                    resource_information += (
+                        "\n".join(
+                            "\t{}\t: {}".format(k.title(), v)
+                            for k, v in creator.items()
+                        ) + "\n"
+                    )
+            elif key in ["title", "publisher"]:
+                resource_information += "{}(s):\n".format(key.title())
+                resource_information += (
+                    "\n".join(
+                        "\t{}\t:{}".format(k.title(), v)
+                        for k, v in value.items()
+                    ) + "\n"
+                )
+            elif key in ["subjectHeading", "personHeading"]:
+                if key == "subjectHeading":
+                    resource_information += "Subject Heading(s):\n"
+                else:
+                    resource_information += "Person Heading(s):\n"
+                if any(value):
+                    resource_information += (
+                        "\n".join(heading for heading in value if heading) +
+                        "\n"
+                    )
+            elif key in [
+                "publicationDate", "generalResourceType", "resourceType"
+            ]:
+                if key == "publicationDate":
+                    resource_information += (
+                        "Publication Date\t: {}\n".format(value)
+                    )
+                    date = re.compile("([0-9]{4})[0-9]{4}")
+                    match = date.match(value)
+                    resource_information += (
+                        "Publication Year\t: {}\n".format(match.group(1))
+                    )
+                elif key == "generalResourceType":
+                    resource_information += (
+                        "General Resource Type\t: {}\n".format(value)
+                    )
+                else:
+                    resource_information += (
+                        "Resource Type\t: {}\n".format(value)
+                    )
+        return resource_information
+
+    def _get_plaintext(self, raw):
         """Get plaintext attachment.
 
-        :param dict record: record
+        :param dict raw: raw data
 
         :returns: plaintext attachment
         :rtype: str
@@ -113,29 +216,20 @@ class TicketManager(object):
         try:
             logger = logging.getLogger().getChild(self._get_plaintext.__name__)
             attachment = "OPENDACHS REQUEST INFORMATION:\n{}\n".format(
-                "\n".join(
-                    "{}\t: {}".format(k.title(), v)
-                    for k, v in record.items() if k != "entry"
-                )
+                self._get_opendachs_information(raw)
             )
             attachment += "RESOURCE INFORMATION:\n{}\n".format(
-                "\n".join(
-                    "{}\t: {}".format(k, v)
-                    for k, v in record["entry"].items() if k != "creator"
-                )
-            )
-            attachment += "creator(s)\t: {}".format(
-                ", ".join(record["entry"]["creator"])
+                self._get_resource_information(raw)
             )
         except Exception:
             logger.exception("failed to get plaintext attachment")
             raise
         return attachment
 
-    def _get_ris(self, record):
+    def _get_ris(self, raw):
         """Get RIS attachment.
 
-        :param dict record: record
+        :param dict raw: raw
 
         :returns: RIS attachment
         :rtype: str
@@ -144,22 +238,50 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(self._get_ris.__name__)
             tags = {
                 "resourceType": "TY",
-                "title": "TI",
+                "creator": "A{}",
+                "publicationDate": "DA",
+                "keyword": "KW",
+                "url": "UR",
                 "publisher": "PB",
-                "publicationYear": "PY",
-                "creator": "AU",
-                "url": "UR"
+                "title": "TI{}",
             }
             tag = "{tag}\u0020\u0020-\u0020{value}\u000A"
-            attachment = tag.format(
-                tag="TY", value=record["entry"]["resourceType"]
-            )
-            for k, v in record["entry"].items():
-                if k not in ["generalResourceType", "resourceType", "creator"]:
-                    attachment += tag.format(tag=tags[k], value=v)
-                elif k == "creator":
-                    for creator in v:
-                        attachment += tag.format(tag=tags[k], value=creator)
+            keyword = ""
+            attachment = tag.format(tag="TY", value=raw["resourceType"])
+            for key, value in raw.items():
+                if key in ["email", "ticket", "flag"]:
+                    continue
+                elif key == "creator":
+                    for i in range(len(value)):
+                        attachment += tag.format(
+                            tag=tags[key].format(i+1),
+                            value=value[i]["romanization"]
+                        )
+                elif key == "title":
+                    attachment += tag.format(
+                        tag=tags[key].format(1), value=value["romanization"]
+                    )
+                    if value["script"]:
+                        attachment += tag.format(
+                            tag=tags[key].format(2), value=value["script"]
+                        )
+                elif key == "publisher":
+                    attachment += tag.format(
+                        tag=tags[key], value=value["romanization"]
+                    )
+                elif key == "publicationDate":
+                    date = re.compile("([0-9]{4})([0-9]{2})([0-9]{2})")
+                    match = date.match(value)
+                    attachment += tag.format(
+                        tag=tags[key],
+                        value="{}/{}/{}".format(
+                            match.group(1), match.group(2), match.group(3)
+                        )
+                    )
+                elif key in ["subjectHeading", "personHeading"]:
+                    keyword += ", ".join(v for v in value)
+            if keyword:
+                attachment += tag.format(tag=tags["keyword"], value=keyword)
             attachment += tag.format(tag="ER", value="")
         except Exception:
             logger.exception("failed to get RIS attachment")
@@ -179,9 +301,9 @@ class TicketManager(object):
                 self._get_attachment.__name__
             )
             if record["flag"] == "submitted" or record["flag"] == "confirmed":
-                attachment = self._get_plaintext(record)
+                attachment = self._get_plaintext(json.loads(record["raw"]))
             elif record["flag"] == "accepted":
-                attachment = self._get_ris(record)
+                attachment = self._get_ris(json.loads(record["raw"]))
         except Exception:
             logger.exception("failed to get attachment")
             raise
@@ -205,18 +327,22 @@ class TicketManager(object):
             parameters = []
             for k in self.sqlite_client.sqlite["column_defs"].keys():
                 if k not in ["timestamp", "warc"]:
-                    if k == "entry":
-                        entry = {
-                            k: v for k, v in dest.items()
-                            if k not in ["ticket", "email", "flag"]
-                        }
-                        parameters.append(json.dumps(entry))
+                    if k == "raw":
+                        parameters.append(json.dumps(dest))
                     else:
                         parameters.append(dest[k])
                 elif k == "timestamp":
                     parameters.append(timestamp)
                 elif k == "warc":
                     parameters.append(warc)
+            #: create user (Cork)
+            args = [
+                "create",
+                dest["ticket"],
+                self._generate_password(),
+                dest["email"]
+            ]
+            src.od_api.api_call(args)
             parameters = tuple(parameters)
             subject = "Your OpenDACHS request " + dest["ticket"]
             body = self._get_body(dest)
@@ -224,7 +350,7 @@ class TicketManager(object):
                 k: v for k, v in dest.items()
                 if k in ["ticket", "email", "flag", "timestamp", "warc"]
             }
-            tmp["entry"] = entry
+            tmp["raw"] = json.dumps(dest)
             attachment = self._get_attachment(tmp)
             msg = src.od_smtp.get_msg(
                 self.smtp, dest["email"], subject, body, attachment=attachment
@@ -254,9 +380,7 @@ class TicketManager(object):
                     self.sqlite_client.update([parameters])
                     body = self._get_body(dest)
                     subject = "OpenDACHS request " + dest["ticket"]
-                    tmp = {k: v for k, v in record.items() if k != "entry"}
-                    tmp["entry"] = json.loads(record["entry"])
-                    attachment = self._get_attachment(tmp)
+                    attachment = self._get_attachment(record)
                     msg = src.od_smtp.get_msg(
                         self.smtp,
                         self.smtp["header_fields"]["reply_to"],
@@ -301,12 +425,8 @@ class TicketManager(object):
                     logger.info("deleted ticket %s", dest["ticket"])
                     body = self._get_body(dest)
                     subject = "Your OpenDACHS request " + dest["ticket"]
-                    tmp = {
-                        k: v for k, v in record.items()
-                        if k != "flag" and k != "entry"
-                    }
+                    tmp = {k: v for k, v in record.items() if k != "flag"}
                     tmp["flag"] = "accepted"
-                    tmp["entry"] = json.loads(record["entry"])
                     attachment = self._get_attachment(tmp)
                     msg = src.od_smtp.get_msg(
                         self.smtp, record["email"], subject, body,
