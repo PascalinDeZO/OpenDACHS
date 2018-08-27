@@ -37,7 +37,21 @@ def api_call(args):
             "docker", "exec", "-it", "webrecorder_app_1",
             "python3", "-m",  "webrecorder.od_webrecorder", *args
         ]
-        subprocess.Popen(args, stderr=subprocess.PIPE)
+        child = subprocess.Popen(args, stderr=subprocess.PIPE)
+        while True:
+            returncode = child.poll()
+            if returncode is None:
+                continue
+            else:
+                break
+        if child.returncode != 0:
+            raise RuntimeError(
+                "failed to call API\t : exit status {}".format(
+                    child.returncode
+                )
+            )
+    except RuntimeError:
+        raise
     except Exception as exception:
         raise RuntimeError("failed to call API\t: {}".format(exception))
     return
