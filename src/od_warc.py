@@ -41,7 +41,7 @@ def write_warc(url, warc):
     try:
         logger = logging.getLogger().getChild(write_warc.__name__)
         fp = open(warc, mode="wb")
-        writer = warcio.warcwriter.WARCWriter(fp, gzip=True)
+        writer = warcio.warcwriter.WARCWriter(fp, gzip=False)
         logger.info("send GET request {}".format(url))
         response = requests.get(url)
         if response.status_code != 200:

@@ -338,9 +338,10 @@ class TicketManager(object):
             #: create user (Cork)
             args = [
                 "create",
-                dest["ticket"],
-                self._generate_password(),
-                dest["email"]
+                "cdengler",
+                "fooBar123",
+                dest["email"],
+                "/{}".format(warc)
             ]
             src.od_api.api_call(args)
             parameters = tuple(parameters)
