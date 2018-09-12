@@ -109,7 +109,11 @@ class TicketManager(object):
             with open(self.TEMPLATES[record["flag"]]) as fp:
                 template = fp.read()
             if record["flag"] == "submitted" or record["flag"] == "confirmed":
-                body = template.format(ticket=record["ticket"])
+                body = template.format(
+                    ticket=record["ticket"],
+                    username=record["username"],
+                    password=record["password"]
+                )
             elif record["flag"] == "accepted" or record["flag"] == "denied":
                 body = template.format(
                     ticket=record["ticket"],
@@ -321,6 +325,8 @@ class TicketManager(object):
                 dest["flag"] = "submitted"
             else:
                 raise RuntimeError("unexpected  flag '%s'", dest["flag"])
+            dest["username"] = "OpenDACHS ticket {}".format(dest["ticket"])
+            dest["password"] = self._generate_password()
             timestamp = datetime.datetime.now()
             warc = "{}/{}.warc".format(self.TMP_WARCS_DIR, dest["ticket"])
             src.od_warc.write_warc(dest["url"], warc)
@@ -335,13 +341,17 @@ class TicketManager(object):
                     parameters.append(timestamp)
                 elif k == "warc":
                     parameters.append(warc)
-            #: create user (Cork)
+            #: create user (Webrecorder)
+            role = "archivist"
+            desc = "OpenDACHS ticket"
+            filename = "/{}".format(warc)
             args = [
                 "create",
-                "cdengler",
-                "fooBar123",
-                dest["email"],
-                "/{}".format(warc)
+                dest["username"],
+                dest["password"],
+                role,
+                desc,
+                filename
             ]
             src.od_api.api_call(args)
             parameters = tuple(parameters)
