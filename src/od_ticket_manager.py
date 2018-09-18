@@ -1,5 +1,5 @@
 #    OpenDACHS 1.0
-#    Copyright (C) 2018  Carine Dengler
+#    Copyright (C) 2018  Carine Dengler, Heidelberg University
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
