@@ -29,13 +29,13 @@ import base64
 import string
 import logging
 import datetime
+import subprocess
 
 # third party imports
 import requests
 import warcio
 
 # library specific imports
-import src.api
 import src.ftp
 import src.email
 import src.sqlite
@@ -129,6 +129,36 @@ class TicketManager(object):
             msg = "failed to archive {}:{}".format(
                 ticket.metadata["url"], exception
             )
+            raise RuntimeError(msg)
+        return
+
+    @staticmethod
+    def call_api(*args):
+        """Call Webrecorder API.
+
+        :param args: command-line arguments
+        """
+        try:
+            args = (
+                "docker", "exec", "-it", "webrecorder_app_1",
+                "python3", "-m", "webrecorder.opendachs", *args
+            )
+            child = subprocess.Popen(args, stderr=subprocess.PIPE)
+            while True:
+                returncode = child.poll()
+                if returncode is None:
+                    continue
+                else:
+                    break
+            if child.returncode != 0:
+                msg = "failed to call Webrecorder API:exit status {}".format(
+                    child.returncode
+                )
+                raise RuntimeError(msg)
+        except RuntimeError:
+            raise
+        except Exception as exception:
+            msg = "failed to call Webrecorder API:{}".format(exception)
             raise RuntimeError(msg)
         return
 
@@ -328,6 +358,9 @@ class TicketManager(object):
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
+            self.call_api(
+                "create", *ticket.user, "OpenDACHS ticket", ticket.archive
+            )
             self.sendmail(ticket, "submitted")
         except Exception as exception:
             logger.exception("failed to submit OpenDACHS ticket %s", filename)
@@ -371,6 +404,8 @@ class TicketManager(object):
             logger.info("moved WARC %s to storage", ticket.archive)
             sqlite_client.delete((data["ticket"],))
             logger.info("deleted ticket %s", data["ticket"])
+            self.call_api("delete", ticket.user.username)
+            logger.info("deleted Webrecorder user %s", ticket.user.username)
             self.sendmail(ticket, "accepted")
         except Exception as exception:
             logger.exception("failed to accept OpenDACHS ticket %s", filename)
@@ -396,6 +431,8 @@ class TicketManager(object):
                 "deleted ticket %s and associated WARC archive %s",
                 data["ticket"], ticket.archive
             )
+            self.call_api("delete", ticket.user.username)
+            logger.info("deleted Webrecorder user %s", ticket.user.username)
             self.sendmail(ticket, "denied")
         except Exception as exception:
             logger.exception("failed to deny OpenDACHS ticket %s", filename)
