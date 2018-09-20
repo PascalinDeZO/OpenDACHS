@@ -94,7 +94,7 @@ class SQLiteClient(object):
         """
         try:
             connection = self.connect()
-            sql = "INSERT INTO {table} VALUES {{columns}}".format(
+            sql = "INSERT INTO {table} VALUES ({columns})".format(
                 table=self.sqlite["SQLite"]["table"],
                 columns=", ".join(
                     "?" for _ in range(len(self.sqlite["column_defs"]))
