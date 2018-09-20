@@ -41,7 +41,7 @@ def read_in_template(name):
     """
     try:
         fp = open("templates/{}.txt".format(name))
-        template = fp.readlines()
+        template = fp.read()
     except OSError as exception:
         msg = "failed to open file templates/{}.txt:{}".format(name, exception)
         raise RuntimeError(msg)
