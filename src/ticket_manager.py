@@ -346,7 +346,7 @@ class TicketManager(object):
                     reply_to=self.smtp["header_fields"]["reply_to"]
                 )
             email_msg = src.email.compose_msg(
-                self.smtp, ticket.metadata["email"], subject, body,
+                self.smtp, ticket.user.email_addr, subject, body,
                 attachment=locals().get("attachment")
             )
             src.email.sendmail(self.smtp, ticket.user.email_addr, email_msg)
