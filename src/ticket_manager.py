@@ -360,7 +360,7 @@ class TicketManager(object):
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
             self.call_api(
-                "create", *ticket.user, "OpenDACHS ticket", ticket.archive
+                "create", *ticket.user, "OpenDACHS ticket", "/"+ticket.archive
             )
             self.sendmail(ticket, "submitted")
         except Exception as exception:
