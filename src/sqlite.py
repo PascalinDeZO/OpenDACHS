@@ -70,7 +70,7 @@ class SQLiteClient(object):
         """Create table if not exists."""
         try:
             connection = self.connect()
-            sql = "CREATE TABLE IF NOT EXISTS {table} {{column_defs}}"
+            sql = "CREATE TABLE IF NOT EXISTS {table} {column_defs}"
             column_defs = ", ".join(
                 "{} {}".format(k, v)
                 for k, v in self.sqlite["column_defs"].items()
