@@ -356,6 +356,7 @@ class TicketManager(object):
             with open(filename) as fp:
                 data = json.load(fp)
             ticket = self._initialize_ticket(data)
+            self.archive(ticket)
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
