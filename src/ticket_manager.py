@@ -162,24 +162,33 @@ class TicketManager(object):
             raise RuntimeError(msg)
         return
 
-    def _prettyprint(self, dict_, level=0):
+    def _prettyprint(self, value, level=0):
         """Return prettyprint.
 
-        :param dict dict_: dict
+        :param value: value
 
         :returns: prettyprint
         :rtype: str
         """
         try:
             prettyprint = ""
-            for k, v in dict_.items():
-                if type(v) == dict:
-                    v = self._prettyprint(v, level=level+1)
-                prettyprint += (
-                    level*" " +
-                    k.title() +
-                    v
-                )
+            if type(value) == dict:
+                for k, v in value.items():
+                    prettyprint += (
+                        level*" " +
+                        k.title() +
+                        self._prettyprint(v, level=level+1) +
+                        "\n"
+                    )
+            elif type(value) == list:
+                for v in value:
+                    prettyprint += (
+                        level*" " +
+                        self._prettyprint(v, level=level+1) +
+                        "\n"
+                    )
+            elif type(value) == str:
+                prettyprint += "{}\n".format(value)
         except Exception as exception:
             msg = "failed to return prettyprint:{}".format(exception)
             raise RuntimeError(msg)
