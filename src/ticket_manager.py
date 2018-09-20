@@ -299,7 +299,7 @@ class TicketManager(object):
             user = self._initialize_user(data)
             archive = "tmp/warcs/{}.warc".format(data["ticket"])
             metadata = {
-                k: v for k, v in data.items
+                k: v for k, v in data.items()
                 if k not in ["email", "ticket", "flag"]
             }
             flag = data["flag"]
