@@ -81,7 +81,9 @@ class TicketManager(object):
         """
         try:
             alphabet = string.ascii_letters + string.digits
-            username = "".join(random.choices(alphabet), k=length)
+            username = "".join(
+                random.choice(alphabet) for _ in range(length)
+            )
         except Exception as exception:
             msg = "failed to generate username:{}".format(exception)
             raise RuntimeError(msg)
