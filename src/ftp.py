@@ -29,7 +29,7 @@ import tempfile
 # library specific imports
 
 
-def _get_ftp_client(ftp):
+def get_ftp_client(ftp):
     """Get FTP client.
 
     :param ConfigParser ftp: FTP configuration
@@ -38,33 +38,31 @@ def _get_ftp_client(ftp):
     :rtype: FTP_TLS
     """
     try:
-        logger = logging.getLogger().getChild(_get_ftp_client.__name__)
         ftp_client = ftplib.FTP_TLS(**ftp["FTP"])
         ftp_client.prot_p()
-    except Exception:
-        logger.exception("failed to get FTP client")
-        raise
+    except Exception as exception:
+        msg = "failed to get FTP client:{}".format(exception)
+        raise RuntimeError(msg)
     return ftp_client
 
 
-def retrieve_file(ftp_client, file_):
+def retrieve_file(ftp_client, filename):
     """Retrieve file.
 
     :param FTP_TLS ftp_client: FTP client
-    :param str file_: filename
+    :param str filename: filename
 
-    :returns: local file
+    :returns: local file filename
     :rtype: str
     """
     try:
-        logger = logging.getLogger().getChild(retrieve_file.__name__)
         fp = tempfile.NamedTemporaryFile(delete=False)
-        ftp_client.retrbinary("RETR {}".format(file_), fp.write)
+        ftp_client.retrbinary("RETR {}".format(filename), fp.write)
         fp.close()
-        ftp_client.delete(file_)
-    except Exception:
-        logger.exception("failed to retrieve file %s", file_)
-        raise
+        ftp_client.delete(filename)
+    except Exception as exception:
+        msg = "failed to retrieve file {}:{}".format(filename, exception)
+        raise RuntimeError(msg)
     return fp.name
 
 
@@ -73,19 +71,21 @@ def retrieve_files(ftp):
 
     :param ConfigParser ftp: FTP configuration
 
-    :returns: local files
-    :rtype: list
+    :returns: list of local file filenames
+    :rtype: str
     """
     try:
         logger = logging.getLogger().getChild(retrieve_files.__name__)
-        ftp_client = _get_ftp_client(ftp)
-        local_files = []
-        for file_ in ftp_client.nlst(ftp["cmd"]["RETR"]):
+        ftp_client = get_ftp_client(ftp)
+        filenames = []
+        for filename in ftp_client.nlst(ftp["cmd"]["RETR"]):
             try:
-                local_files.append(retrieve_file(ftp_client, file_))
-            except Exception:
-                logger.warning("failed to retrieve file %s", file_)
-    except Exception:
-        logger.exception("failed to retrieve files")
-        raise
-    return local_files
+                filenames.append(retrieve_file(ftp_client, filename))
+            except Exception as exception:
+                logger.warning(
+                    "failed to retrieve file %s:%s", filename, exception
+                )
+    except Exception as exception:
+        msg = "failed to retrieve files:{}".format(exception)
+        raise RuntimeError(msg)
+    return filenames
