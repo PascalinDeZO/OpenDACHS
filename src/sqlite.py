@@ -21,7 +21,6 @@
 
 
 # standard library imports
-import logging
 import sqlite3
 
 # third party imports
@@ -29,173 +28,222 @@ import sqlite3
 
 
 class SQLiteClient(object):
-    """OpenDACHS SQLite database.
+    """OpenDACHS database client.
 
     :ivar ConfigParser sqlite: SQLite configuration
     """
 
     def __init__(self, sqlite):
-        """Initialize OpenDACHS SQLite database.
+        """Initialize OpenDACHS database client.
 
         :param ConfigParser sqlite: SQLite configuration
         """
         try:
-            logger = logging.getLogger().getChild(self.__init__.__name__)
             self.sqlite = sqlite
-        except Exception:
-            logger.exception("failed to initialize OpenDACHS SQLite database")
-            raise
+        except Exception as exception:
+            msg = "failed to initialize OpenDACHS database client:{}".format(
+                exception
+            )
+            raise RuntimeError(msg)
         return
 
     def connect(self):
-        """Connect to OpenDACHS SQLite database.
+        """Connect to OpenDACHS database.
 
         :returns: connection
         :rtype: Connection
         """
         try:
-            logger = logging.getLogger().getChild(self.connect.__name__)
             connection = sqlite3.connect(
                 self.sqlite["SQLite"]["database"],
                 detect_types=sqlite3.PARSE_COLNAMES
             )
             connection.row_factory = sqlite3.Row
-        except Exception:
-            logger.exception("failed to connect to OpenDACHS SQLite database")
-            raise
+        except Exception as exception:
+            msg = "failed to connect to OpenDACHS database:{}".format(
+                exception
+            )
+            raise RuntimeError(msg)
         return connection
 
     def create_table(self):
         """Create table if not exists."""
         try:
-            logger = logging.getLogger().getChild(self.create_table.__name__)
             connection = self.connect()
-            sql = "CREATE TABLE IF NOT EXISTS {table} ({column_defs})"
+            sql = "CREATE TABLE IF NOT EXISTS {table} {{column_defs}}"
             column_defs = ", ".join(
-                k + " " + v
+                "{} {}".format(k, v)
                 for k, v in self.sqlite["column_defs"].items()
             )
             sql = sql.format(
-                table=self.sqlite["SQLite"]["table"], column_defs=column_defs
+                table=self.sqlite["SQLite"]["table"],
+                column_defs=column_defs
             )
             connection.execute(sql)
             connection.commit()
             connection.close()
         except Exception as exception:
-            logger.exception("failed to create table\t: %s", exception)
-            raise
+            msg = "failed to create table:{}".format(exception)
+            raise RuntimeError(msg)
         return
 
-    def insert(self, parameters):
-        """Insert records.
+    def insert(self, rows):
+        """Insert rows.
 
-        :param list parameters: parameters
+        :param list rows: rows
         """
         try:
-            logger = logging.getLogger().getChild(self.insert.__name__)
             connection = self.connect()
-            sql = "INSERT INTO {table} VALUES ({columns})".format(
+            sql = "INSERT INTO {table} VALUES {{columns}}".format(
                 table=self.sqlite["SQLite"]["table"],
                 columns=", ".join(
-                    "?" for _ in range(len(self.sqlite["column_defs"].items()))
+                    "?" for _ in range(len(self.sqlite["column_defs"]))
                 )
             )
-            connection.executemany(sql, parameters)
+            connection.executemany(sql, rows)
             connection.commit()
             connection.close()
-        except Exception:
-            logger.exception("failed to insert records")
-            raise
+        except Exception as exception:
+            msg = "failed to insert rows:{}".format(exception)
+            raise RuntimeError(msg)
         return
 
-    def select(self, parameters=()):
-        """Select record.
+    def select_rows(self, column="", parameters=()):
+        """Select rows.
 
+        :param str column: column
         :param tuple parameters: parameters
 
-        :returns: record
-        :rtype: dict
+        :returns: rows
+        :rtype: list
         """
         try:
-            logger = logging.getLogger().getChild(self.select.__name__)
             connection = self.connect()
-            if parameters:
+            if column and parameters:
                 sql = "SELECT * FROM {table} WHERE {column} = ?".format(
                     table=self.sqlite["SQLite"]["table"],
-                    column="ticket"
+                    column=column
                 )
                 cursor = connection.execute(sql, parameters)
+            elif column or parameters:
+                msg = "either pass both column and parameters or neither"
+                raise RuntimeError(msg)
             else:
                 sql = "SELECT * FROM {table}".format(
                     table=self.sqlite["SQLite"]["table"]
                 )
                 cursor = connection.execute(sql)
-            records = [
-                dict(record) for record in cursor
-            ]
-        except Exception:
-            logger.exception("failed to select record")
-            raise
-        return records
-
-    def update(self, parameters):
-        """Update records.
-
-        :param list parameters: parameters
-        """
-        try:
-            logger = logging.getLogger().getChild(self.update.__name__)
-            connection = self.connect()
-            sql = "UPDATE {table} SET {column0} = ? WHERE {column1} = ?"
-            sql = sql.format(
-                table=self.sqlite["SQLite"]["table"],
-                column0="flag",
-                column1="ticket"
-            )
-            connection.executemany(sql, parameters)
-            connection.commit()
-            connection.close()
+            rows = [tuple(row) for row in cursor]
         except Exception as exception:
-            logger.exception("failed to update records\t: %s", exception)
-            raise
-        return
+            msg = "failed to select rows:{}".format(exception)
+            raise RuntimeError(msg)
+        return rows
 
-    def delete(self, parameters):
-        """Delete records.
+    def select_row(self, column, parameters):
+        """Select row.
 
-        :param list parameters: parameters
-        """
-        try:
-            logger = logging.getLogger().getChild(self.delete.__name__)
-            connection = self.connect()
-            sql = "DELETE FROM {table} WHERE {column} = ?".format(
-                table=self.sqlite["SQLite"]["table"],
-                column="ticket"
-            )
-            connection.executemany(sql, parameters)
-            connection.commit()
-            connection.close()
-        except Exception as exception:
-            logger.exception("failed to delete records\t: %s", exception)
-            raise
-        return
-
-    def execute(self, sql, parameters):
-        """Execute query.
-
-        :param str sql: query
+        :param str column: column
         :param tuple parameters: parameters
 
-        :returns: cursor
-        :rtype: Cursor
+        :returns: row or None
+        :rtype: tuple or None
         """
         try:
-            logger = logging.getLogger().getChild(self.execute.__name__)
+            rows = self.select_rows(column=column, parameters=parameters)
+            if len(rows) > 1:
+                msg = "query result is not unique"
+                raise RuntimeError(msg)
+            elif len(rows):
+                row = None
+            else:
+                row = rows[0]
+        except Exception as exception:
+            msg = "failed to select row:{}".format(exception)
+            raise RuntimeError(msg)
+        return row
+
+    def update_rows(self, column0, parameters, column1=""):
+        """Update rows.
+
+        :param str column0: column to be updated
+        :param tuple parameters: parameters
+        :param str column1: column WHERE clause
+
+        :returns: rows (updated)
+        :rtype: list
+        """
+        try:
             connection = self.connect()
-            cursor = connection.execute(sql, parameters)
+            if column1:
+                sql = "UPDATE {table} SET {column0} = ? WHERE {column1} = ?"
+                sql = sql.format(
+                    table=self.sqlite["SQLite"]["table"],
+                    column0=column0,
+                    column1=column1
+                )
+            else:
+                sql = "UPDATE {table} SET {column0} = ?"
+                sql = sql.format(
+                    table=self.sqlite["SQLite"]["table"],
+                    column0=column0
+                )
+            connection.executemany(sql, parameters)
             connection.commit()
             connection.close()
         except Exception as exception:
-            logger.exception("failed to execute query\t: %s", exception)
-            raise
-        return cursor
+            msg = "failed to update rows:{}".format(exception)
+            raise RuntimeError(msg)
+        try:
+            rows = self.select_rows(column=column1, parameters=parameters)
+        except Exception as exception:
+            msg = "failed to select updated rows:{}".format(exception)
+            raise RuntimeError(msg)
+        return rows
+
+    def update_row(self, column0, column1, parameters):
+        """Update row.
+
+        :param str column0: column to be updated
+        :param str column1: column WHERE clause
+        :param tuple parameters: parameters
+
+        :returns: row or None
+        :rtype: tuple or None
+        """
+        try:
+            rows = self.update_rows(column0, parameters, column1=column1)
+            if len(rows) > 1:
+                msg = "failed to select updated row:{}".format(
+                    "query result is not unique"
+                )
+                raise RuntimeError(msg)
+            elif len(rows) == 0:
+                row = None
+            else:
+                row = rows[0]
+        except Exception as exception:
+            msg = "failed to update and/or select updated row:{}".format(
+                exception
+            )
+            raise RuntimeError(msg)
+        return row
+
+    def delete(self, column, parameters):
+        """Delete rows.
+
+        :param tuple parameters: parameters
+        """
+        try:
+            connection = self.connect()
+            sql = "DELETE FROM {table} WHERE {column} = ?"
+            sql = sql.format(
+                table=self.sqlite["SQLite"]["table"],
+                column=column
+            )
+            connection.executemany(sql, parameters)
+            connection.commit()
+            connection.close()
+        except Exception as exception:
+            msg = "failed to delete rows:{}".format(exception)
+            raise RuntimeError(msg)
+        return

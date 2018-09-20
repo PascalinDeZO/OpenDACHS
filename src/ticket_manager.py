@@ -295,6 +295,7 @@ class TicketManager(object):
         :rtype: Ticket
         """
         try:
+            id_ = data["ticket"]
             user = self._initialize_user(data)
             archive = "tmp/warcs/{}.warc".format(data["ticket"])
             metadata = {
@@ -304,7 +305,7 @@ class TicketManager(object):
             flag = data["flag"]
             timestamp = datetime.datetime.now()
             ticket = src.ticket.Ticket(
-                user, archive, metadata, flag, timestamp
+                id_, user, archive, metadata, flag, timestamp
             )
         except Exception as exception:
             msg = "failed to initialize OpenDACHS ticket:{}".format(exception)
@@ -323,7 +324,7 @@ class TicketManager(object):
                 attachment = self.compose_plaintext_attachment(ticket)
                 body = src.email.compose_body(
                     name,
-                    ticket=ticket.user.username,
+                    ticket=ticket.id_,
                     username=ticket.user.username,
                     password=ticket.user.password
                 )
@@ -332,7 +333,7 @@ class TicketManager(object):
                     attachment = self.compose_ris_attachment(ticket)
                 body = src.email.compose_body(
                     name,
-                    ticket=ticket.user.username,
+                    ticket=ticket.id_,
                     reply_to=self.smtp["header_fields"]["reply_to"]
                 )
             email_msg = src.email.compose_msg(
@@ -378,7 +379,10 @@ class TicketManager(object):
             with open(filename) as fp:
                 data = json.load(fp)
             sqlite_client = src.sqlite.SQLiteClient(self.smtp)
-            row = sqlite_client.update((data["flag"], data["ticket"]))
+            row = sqlite_client.update_row(
+                "flag", (data["flag"], data["ticket"]),
+                column1="ticket"
+            )
             ticket = src.ticket.Ticket.get_ticket(row)
             self.sendmail(ticket, "confirmed")
         except Exception as exception:
@@ -397,12 +401,12 @@ class TicketManager(object):
             with open(filename) as fp:
                 data = json.load(fp)
             sqlite_client = src.sqlite.SQLiteClient(self.smtp)
-            row = sqlite_client.select((data["ticket"],))
+            row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
             archive = "storage/{}.warc".format(data["ticket"])
             os.rename(ticket.archive, archive)
             logger.info("moved WARC %s to storage", ticket.archive)
-            sqlite_client.delete((data["ticket"],))
+            sqlite_client.delete("ticket", (data["ticket"],))
             logger.info("deleted ticket %s", data["ticket"])
             self.call_api("delete", ticket.user.username)
             logger.info("deleted Webrecorder user %s", ticket.user.username)
@@ -423,10 +427,10 @@ class TicketManager(object):
             with open(filename) as fp:
                 data = json.load(fp)
             sqlite_client = src.sqlite.SQLiteClient(self.smtp)
-            row = sqlite_client.select((data["ticket"],))
+            row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.Ticket.get_ticket(row)
             os.unlink(ticket.archive)
-            sqlite_client.delete((data["ticket"],))
+            sqlite_client.delete("ticket", (data["ticket"],))
             logger.info(
                 "deleted ticket %s and associated WARC archive %s",
                 data["ticket"], ticket.archive

@@ -21,6 +21,7 @@
 
 
 # standard library imports
+import json
 import collections
 
 # third party imports
@@ -41,9 +42,10 @@ class Ticket(object):
     :ivar str flag: status flag
     """
 
-    def __init__(self, user, archive, metadata, flag, timestamp):
+    def __init__(self, id_, user, archive, metadata, flag, timestamp):
         """Initialize OpenDACHS ticket.
 
+        :param str id_: ticket ID
         :param User user: Webrecorder user
         :param str archive: WARC archive filename
         :param dict metadata: WARC archive metadata
@@ -51,6 +53,7 @@ class Ticket(object):
         :param datetime timestamp: timestamp
         """
         try:
+            self.id_ = id_
             self.user = user
             self.archive = archive
             self.metadata = metadata
@@ -87,9 +90,10 @@ class Ticket(object):
         """
         try:
             row = (
-                list(self.user),
+                self.id_,
+                json.dumps(list(self.user)),
                 self.archive,
-                self.metadata,
+                json.dumps(self.metadata),
                 self.flag,
                 self.timestamp
             )
@@ -108,8 +112,13 @@ class Ticket(object):
         :rtype: Ticket
         """
         try:
-            user = User(row[0])
-            ticket = cls(user, *row[1])
+            id_ = row[0]
+            user = User(json.loads(row[1]))
+            archive = row[2]
+            metadata = json.loads(row[3])
+            flag = row[4]
+            timestamp = row[5]
+            ticket = cls(id_, user, archive, metadata, flag, timestamp)
         except Exception as exception:
             msg = "failed to get OpenDACHS ticket:{}".format(exception)
             raise RuntimeError(msg)
