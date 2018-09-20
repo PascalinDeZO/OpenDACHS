@@ -26,6 +26,7 @@ import os
 import re
 import json
 import base64
+import random
 import string
 import logging
 import datetime
@@ -33,6 +34,7 @@ import subprocess
 
 # third party imports
 import requests
+
 import warcio
 
 # library specific imports
@@ -67,6 +69,23 @@ class TicketManager(object):
             msg = "failed to initialize ticket manager:{}".format(exception)
             raise RuntimeError(msg)
         return
+
+    @staticmethod
+    def generate_username(length=8):
+        """Generate Webrecorder username.
+
+        :param int length: length
+
+        :returns: username
+        :rtype: str
+        """
+        try:
+            alphabet = string.ascii_letters + string.digits
+            username = "".join(random.choices(alphabet), k=length)
+        except Exception as exception:
+            msg = "failed to generate username:{}".format(exception)
+            raise RuntimeError(msg)
+        return username
 
     @staticmethod
     def generate_password(length=16):
@@ -285,7 +304,7 @@ class TicketManager(object):
         :rtype: User
         """
         try:
-            username = data["ticket"]
+            username = self.generate_username()
             role = "archivist"
             password = self.generate_password()
             email_addr = data["email"]
