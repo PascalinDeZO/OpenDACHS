@@ -28,7 +28,7 @@ import collections
 # library specific imports
 
 
-User = collections.namedTuple(
+User = collections.namedtuple(
     "User", ["username", "role", "password", "email_addr"]
 )
 
