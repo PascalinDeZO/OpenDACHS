@@ -21,13 +21,12 @@
 
 
 # standard library imports
-import logging
 import argparse
 import configparser
 
 # third party imports
 # library specific imports
-import src.od_ticket_manager
+import src.ticket_manager
 
 
 def get_argument_parser():
@@ -37,51 +36,49 @@ def get_argument_parser():
     :rtype: ArgumentParser
     """
     try:
-        logger = logging.getLogger(get_argument_parser.__name__)
         parser = argparse.ArgumentParser()
         parser.add_argument("ftp", help="FTP configuration")
         parser.add_argument("smtp", help="SMTP configuration")
         parser.add_argument("sqlite", help="SQLite configuration")
-    except Exception:
-        logger.exception("failed to get argument parser")
-        raise
+    except Exception as exception:
+        msg = "failed to get argument parser:{}".format(exception)
+        raise SystemExit(msg)
     return parser
 
 
-def read_config(file_):
+def read_config(filename):
     """Read INI configuration file in.
 
-    :param str file_: configuration file name
+    :param str filename: configuration file filename
 
     :returns: config
     :rtype: ConfigParser
     """
     try:
-        logger = logging.getLogger(read_config.__name__)
         config = configparser.ConfigParser()
         config.optionxform = str
-        config.read(file_)
-    except Exception:
-        logger.exception("failed to read configuration file %s in", file_)
-        raise SystemExit
+        config.read(filename)
+    except Exception as exception:
+        msg = "failed to read INI configuration file {}in:{}".format(
+            filename, exception
+        )
+        raise SystemExit(msg)
     return config
 
 
 def main():
-    """main routine."""
+    """Main routine."""
     try:
-        logging.basicConfig(level=logging.INFO)
-        logger = logging.getLogger(main.__name__)
         parser = get_argument_parser()
         args = parser.parse_args()
         ftp = read_config(args.ftp)
         smtp = read_config(args.smtp)
         sqlite = read_config(args.sqlite)
-        ticket_manager = src.od_ticket_manager.TicketManager(ftp, smtp, sqlite)
-        ticket_manager.manage_tickets()
-    except Exception:
-        logger.exception("an exception was raised")
-        raise SystemExit
+        ticket_manager = src.ticket_manager.TicketManager(ftp, smtp, sqlite)
+        ticket_manager.manage()
+    except Exception as exception:
+        msg = "an exception was raised:{}".format(exception)
+        raise SystemExit(msg)
     return
 
 
