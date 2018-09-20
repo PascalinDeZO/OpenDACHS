@@ -463,7 +463,7 @@ class TicketManager(object):
             for filename in files:
                 try:
                     fp = open(filename)
-                    data = json.load(filename)
+                    data = json.load(fp)
                     if data["flag"] == "pending":
                         self.submit(filename)
                         managed[0] += 1
