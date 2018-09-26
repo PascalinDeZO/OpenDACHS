@@ -1,0 +1,2 @@
+Your OpenDACHS request {ticket} has been declined. For further information,
+please contact {reply_to}.

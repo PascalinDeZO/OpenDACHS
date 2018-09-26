@@ -1,0 +1,16 @@
+The OpenDACHS request {ticket} has been submitted and confirmed.
+
+You can find the metadata associated with the URL in the attachment, and view
+the WARC archive by visiting [1]
+
+and logging in with
+
+{username} (username)
+{password} (password).
+
+Either accept the OpenDACHS request by visiting [2], or deny the request by
+visiting [3].
+
+[1]
+[2]
+[3]
