@@ -123,3 +123,24 @@ class Ticket(object):
             msg = "failed to get OpenDACHS ticket:{}".format(exception)
             raise RuntimeError(msg)
         return ticket
+
+    def get_json(self):
+        """Get JSON formatted string.
+
+        :returns: JSON formatted string
+        :rtype: str
+        """
+        try:
+            json_string = {
+                "id": self.id_,
+                "user": list(self.user),
+                "archive": self.archive,
+                "metadata": self.metadata,
+                "flag": self.flag,
+                "timestamp": self.timestamp.isoformat()
+            }
+            json_string = json.dumps(json_string)
+        except Exception as exception:
+            msg = "failed to get JSON formatted string:{}".format(exception)
+            raise RuntimeError(msg)
+        return json_string
