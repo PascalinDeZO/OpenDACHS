@@ -195,7 +195,7 @@ class SQLiteClient(object):
             raise RuntimeError(msg)
         try:
             if column1:
-                parameters = [row[1] for row in parameters]
+                parameters = [(row[1],) for row in parameters]
             rows = [
                 self.select_rows(column=column1, parameters=row)
                 for row in parameters
