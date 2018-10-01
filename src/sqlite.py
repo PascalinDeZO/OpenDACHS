@@ -56,7 +56,7 @@ class SQLiteClient(object):
         try:
             connection = sqlite3.connect(
                 self.sqlite["SQLite"]["database"],
-                detect_types=sqlite3.PARSE_COLNAMES
+                detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES
             )
             connection.row_factory = sqlite3.Row
         except Exception as exception:
@@ -153,7 +153,7 @@ class SQLiteClient(object):
             if len(rows) > 1:
                 msg = "query result is not unique"
                 raise RuntimeError(msg)
-            elif len(rows):
+            elif not len(rows):
                 row = None
             else:
                 row = rows[0]
@@ -238,7 +238,7 @@ class SQLiteClient(object):
     def delete(self, column, parameters):
         """Delete rows.
 
-        :param tuple parameters: parameters
+        :param list parameters: parameters
         """
         try:
             connection = self.connect()

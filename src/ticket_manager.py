@@ -418,16 +418,16 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(self.accept.__name__)
             with open(filename) as fp:
                 data = json.load(fp)
-            sqlite_client = src.sqlite.SQLiteClient(self.smtp)
+            sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
             archive = "storage/{}.warc".format(data["ticket"])
             os.rename(ticket.archive, archive)
             logger.info("moved WARC %s to storage", ticket.archive)
-            sqlite_client.delete("ticket", (data["ticket"],))
+            sqlite_client.delete("ticket", [(data["ticket"],)])
             logger.info("deleted ticket %s", data["ticket"])
-            self.call_api("delete", ticket.user.username)
-            logger.info("deleted Webrecorder user %s", ticket.user.username)
+            ticket.flag = "deleted"
+            self.dump_ticket(ticket)
             self.sendmail(ticket, "accepted")
         except Exception as exception:
             logger.exception("failed to accept OpenDACHS ticket %s", filename)
