@@ -394,7 +394,7 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(self.confirm.__name__)
             with open(filename) as fp:
                 data = json.load(fp)
-            sqlite_client = src.sqlite.SQLiteClient(self.smtp)
+            sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.update_row(
                 "flag", "ticket", (data["flag"], data["ticket"])
             )
