@@ -113,7 +113,7 @@ class Ticket(object):
         """
         try:
             id_ = row[0]
-            user = User(json.loads(row[1]))
+            user = User(*json.loads(row[1]))
             archive = row[2]
             metadata = json.loads(row[3])
             flag = row[4]
