@@ -396,8 +396,7 @@ class TicketManager(object):
                 data = json.load(fp)
             sqlite_client = src.sqlite.SQLiteClient(self.smtp)
             row = sqlite_client.update_row(
-                "flag", (data["flag"], data["ticket"]),
-                column1="ticket"
+                "flag", "ticket", (data["flag"], data["ticket"])
             )
             ticket = src.ticket.Ticket.get_ticket(row)
             self.sendmail(ticket, "confirmed")
