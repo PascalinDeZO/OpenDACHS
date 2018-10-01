@@ -56,7 +56,7 @@ class SQLiteClient(object):
         try:
             connection = sqlite3.connect(
                 self.sqlite["SQLite"]["database"],
-                detect_types=sqlite3.PARSE_COLNAMES
+                detect_types=sqlite3.PARSE_DECLTYPES|sqlite3.PARSE_COLNAMES
             )
             connection.row_factory = sqlite3.Row
         except Exception as exception:
