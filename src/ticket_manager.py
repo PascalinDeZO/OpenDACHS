@@ -444,17 +444,13 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(self.deny.__name__)
             with open(filename) as fp:
                 data = json.load(fp)
-            sqlite_client = src.sqlite.SQLiteClient(self.smtp)
+            sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.Ticket.get_ticket(row)
             os.unlink(ticket.archive)
-            sqlite_client.delete("ticket", (data["ticket"],))
-            logger.info(
-                "deleted ticket %s and associated WARC archive %s",
-                data["ticket"], ticket.archive
-            )
-            self.call_api("delete", ticket.user.username)
-            logger.info("deleted Webrecorder user %s", ticket.user.username)
+            sqlite_client.delete("ticket", [(data["ticket"],)])
+            ticket.flag = "deleted"
+            self.dump_ticket(ticket)
             self.sendmail(ticket, "denied")
         except Exception as exception:
             logger.exception("failed to deny OpenDACHS ticket %s", filename)
