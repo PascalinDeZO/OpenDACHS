@@ -42,14 +42,33 @@ class TestTicket(unittest.TestCase):
         )
         return
 
+    def test_get_ticket_00(self):
+        """Test method to get OpenDACHS ticket based on SQLite row."""
+        row = (
+            self.ticket.id_,
+            json.dumps(list(self.ticket.user)),
+            self.ticket.archive,
+            json.dumps(self.ticket.metadata),
+            self.ticket.flag,
+            self.ticket.timestamp
+        )
+        ticket = self.ticket.get_ticket(row)
+        self.assertEqual(self.ticket.id_, ticket.id_)
+        self.assertEqual(self.ticket.user, ticket.user)
+        self.assertEqual(self.ticket.archive, ticket.archive)
+        self.assertEqual(self.ticket.metadata, ticket.metadata)
+        self.assertEqual(self.ticket.flag, ticket.flag)
+        self.assertEqual(self.ticket.timestamp, ticket.timestamp)
+        return
+
     def test_get_json_00(self):
         """Test method to get JSON formatted string."""
         json_string = self.ticket.get_json()
         python_obj = json.loads(json_string)
         self.assertEqual(python_obj["id"], self.ticket.id_)
-        self.assertListEqual(python_obj["user"], list(self.ticket.user))
+        self.assertEqual(python_obj["user"], list(self.ticket.user))
         self.assertEqual(python_obj["archive"], self.ticket.archive)
-        self.assertDictEqual(python_obj["metadata"], {})
+        self.assertEqual(python_obj["metadata"], {})
         self.assertEqual(python_obj["flag"], self.ticket.flag)
         self.assertEqual(
             python_obj["timestamp"], self.ticket.timestamp.isoformat()

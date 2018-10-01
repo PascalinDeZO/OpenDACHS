@@ -166,7 +166,7 @@ class SQLiteClient(object):
         """Update rows.
 
         :param str column0: column to be updated
-        :param tuple parameters: parameters
+        :param list parameters: parameters
         :param str column1: column WHERE clause
 
         :returns: rows (updated)
@@ -194,7 +194,12 @@ class SQLiteClient(object):
             msg = "failed to update rows:{}".format(exception)
             raise RuntimeError(msg)
         try:
-            rows = self.select_rows(column=column1, parameters=parameters)
+            if column1:
+                parameters = [(row[1],) for row in parameters]
+            rows = [
+                self.select_rows(column=column1, parameters=row)
+                for row in parameters
+            ]
         except Exception as exception:
             msg = "failed to select updated rows:{}".format(exception)
             raise RuntimeError(msg)
@@ -211,7 +216,9 @@ class SQLiteClient(object):
         :rtype: tuple or None
         """
         try:
-            rows = self.update_rows(column0, parameters, column1=column1)
+            rows = self.update_rows(
+                column0, [parameters], column1=column1
+            ).pop(0)
             if len(rows) > 1:
                 msg = "failed to select updated row:{}".format(
                     "query result is not unique"
