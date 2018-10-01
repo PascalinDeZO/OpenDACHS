@@ -154,32 +154,19 @@ class TicketManager(object):
         return
 
     @staticmethod
-    def call_api(*args):
-        """Call Webrecorder API.
+    def dump_ticket(ticket):
+        """Dump OpenDACHS ticket.
 
-        :param args: command-line arguments
+        :param Ticket ticket: OpenDACHS ticket
         """
         try:
-            args = (
-                "docker", "exec", "-it", "webrecorder_app_1",
-                "python3", "-m", "webrecorder.opendachs", *args
-            )
-            child = subprocess.Popen(args, stderr=subprocess.PIPE)
-            while True:
-                returncode = child.poll()
-                if returncode is None:
-                    continue
-                else:
-                    break
-            if child.returncode != 0:
-                msg = "failed to call Webrecorder API:exit status {}".format(
-                    child.returncode
-                )
-                raise RuntimeError(msg)
-        except RuntimeError:
-            raise
+            json_file = "tmp/json_files/{}.json".format(ticket.id_)
+            fp = open(json_file, mode="w")
+            fp.write(ticket.get_json())
         except Exception as exception:
-            msg = "failed to call Webrecorder API:{}".format(exception)
+            msg = "failed to dump OpenDACHS ticket {}:{}".format(
+                ticket.id_, exception
+            )
             raise RuntimeError(msg)
         return
 
@@ -390,9 +377,7 @@ class TicketManager(object):
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
-            self.call_api(
-                "create", *ticket.user, "OpenDACHS ticket", "/"+ticket.archive
-            )
+            self.dump_ticket(ticket)
             self.sendmail(ticket, "submitted")
         except Exception as exception:
             logger.exception("failed to submit OpenDACHS ticket %s", filename)
