@@ -216,9 +216,9 @@ class SQLiteClient(object):
         :rtype: tuple or None
         """
         try:
-            rows = next(
-                self.update_rows(column0, [parameters], column1=column1)
-            )
+            rows = self.update_rows(
+                column0, [parameters], column1=column1
+            ).pop(0)
             if len(rows) > 1:
                 msg = "failed to select updated row:{}".format(
                     "query result is not unique"
