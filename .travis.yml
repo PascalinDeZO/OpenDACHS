@@ -4,4 +4,5 @@ python:
         - "3.5"
 install:
         - pip install warcio
-
+script:
+         - pytest tests
