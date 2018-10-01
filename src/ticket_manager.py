@@ -383,6 +383,9 @@ class TicketManager(object):
             logger.exception("failed to submit OpenDACHS ticket %s", filename)
             msg = "failed to submit OpenDACHS ticket:{}".format(exception)
             raise RuntimeError(msg)
+        finally:
+            if "fp" in locals():
+                fp.close()
         return
 
     def confirm(self, filename):
