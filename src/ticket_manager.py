@@ -446,7 +446,7 @@ class TicketManager(object):
                 data = json.load(fp)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
-            ticket = src.Ticket.get_ticket(row)
+            ticket = src.ticket.Ticket.get_ticket(row)
             os.unlink(ticket.archive)
             sqlite_client.delete("ticket", [(data["ticket"],)])
             ticket.flag = "deleted"
