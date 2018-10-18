@@ -183,12 +183,14 @@ class TicketManager(object):
             if type(value) == dict:
                 for k, v in value.items():
                     prettyprint += "{}{}:\t{}\n".format(
-                        level*" ", k.title(), self._prettyprint(v, level=level+1)
+                        level*"-",
+                        k.title(),
+                        self._prettyprint(v, level=level+1)
                     )
             elif type(value) == list:
                 for v in value:
                     prettyprint += "{}{}\n".format(
-                        level*" ", self._prettyprint(v, level=level+1)
+                        level*"-", self._prettyprint(v, level=level+1)
                     )
             elif type(value) == str:
                 prettyprint += "\t{}\n".format(value)
