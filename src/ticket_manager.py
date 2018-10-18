@@ -474,6 +474,7 @@ class TicketManager(object):
             counter = 0
             for ticket in tickets:
                 if ticket.flag == "pending":
+                    logger.info("remove expired ticket %s", ticket.id_)
                     os.unlink(ticket.archive)
                     sqlite_client.delete("ticket", [(ticket.id_)])
                     ticket.flag = "deleted"
