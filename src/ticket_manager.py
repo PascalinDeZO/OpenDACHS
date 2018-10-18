@@ -185,13 +185,17 @@ class TicketManager(object):
                     v = self._prettyprint(v, level=level+1)
                     if v:
                         prettyprint += "{level}{k}:{v}\n".format(
-                            level*"-", k, v
+                            level=level*"-",
+                            k=k,
+                            v=v
                         )
             elif type(value) == list:
                 for v in value:
                     v = self._prettyprint(v, level=level+1)
                     if v:
-                        prettyprint += "{level}{v}\n".format(level*"-", v)
+                        prettyprint += "{level}{v}\n".format(
+                            level=level*"-", v=v
+                        )
             elif type(value) == str:
                 if value:
                     prettyprint += value
