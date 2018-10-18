@@ -468,7 +468,7 @@ class TicketManager(object):
             logger = logging.getLogger().getChild(self.remove_expired.__name__)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             rows = sqlite_client.select_rows(
-                "timestamp", ("date('now', '-3 day')")
+                "timestamp", ("date('now', '-3 day')",)
             )
             tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
             counter = 0
