@@ -470,13 +470,16 @@ class TicketManager(object):
             rows = sqlite_client.select_rows(
                 column="timestamp",
                 parameters=("date('now', '-3 day')",),
-                operator="<="
+                operator="<"
             )
             tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
             counter = 0
             for ticket in tickets:
                 if ticket.flag == "pending":
-                    logger.info("remove expired ticket %s", ticket.id_)
+                    logger.info(
+                        "remove expired ticket %s (timestamp %s)",
+                        ticket.id_, ticket.timestamp
+                    )
                     os.unlink(ticket.archive)
                     sqlite_client.delete("ticket", [(ticket.id_,)])
                     ticket.flag = "deleted"
@@ -484,7 +487,9 @@ class TicketManager(object):
                     self.sendmail(ticket, "expired")
                     counter += 1
         except Exception as exception:
-            msg = "failed to remove expired OpenDACHS tickets:{}".format(exception)
+            msg = "failed to remove expired OpenDACHS tickets:{}".format(
+                exception
+            )
             raise RuntimeError(msg)
         return counter
 
