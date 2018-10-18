@@ -108,11 +108,12 @@ class SQLiteClient(object):
             raise RuntimeError(msg)
         return
 
-    def select_rows(self, column="", parameters=()):
+    def select_rows(self, column="", parameters=(), operator="="):
         """Select rows.
 
         :param str column: column
         :param tuple parameters: parameters
+        :param str operator: operator
 
         :returns: rows
         :rtype: list
@@ -120,9 +121,11 @@ class SQLiteClient(object):
         try:
             connection = self.connect()
             if column and parameters:
-                sql = "SELECT * FROM {table} WHERE {column} = ?".format(
+                sql = "SELECT * FROM {table} WHERE {column} {operator} ?"
+                sql = sql.format(
                     table=self.sqlite["SQLite"]["table"],
-                    column=column
+                    column=column,
+                    operator=operator
                 )
                 cursor = connection.execute(sql, parameters)
             elif column or parameters:
@@ -139,17 +142,20 @@ class SQLiteClient(object):
             raise RuntimeError(msg)
         return rows
 
-    def select_row(self, column, parameters):
+    def select_row(self, column, parameters, operator="="):
         """Select row.
 
         :param str column: column
         :param tuple parameters: parameters
+        :param str operator: operator
 
         :returns: row or None
         :rtype: tuple or None
         """
         try:
-            rows = self.select_rows(column=column, parameters=parameters)
+            rows = self.select_rows(
+                column=column, parameters=parameters, operator=operator
+            )
             if len(rows) > 1:
                 msg = "query result is not unique"
                 raise RuntimeError(msg)

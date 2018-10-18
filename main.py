@@ -23,6 +23,7 @@
 # standard library imports
 import argparse
 import configparser
+import logging
 
 # third party imports
 # library specific imports
@@ -69,6 +70,7 @@ def read_config(filename):
 def main():
     """Main routine."""
     try:
+        logging.basicConfig(level=logging.INFO)
         parser = get_argument_parser()
         args = parser.parse_args()
         ftp = read_config(args.ftp)
