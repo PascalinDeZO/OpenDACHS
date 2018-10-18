@@ -182,21 +182,16 @@ class TicketManager(object):
             prettyprint = ""
             if type(value) == dict:
                 for k, v in value.items():
-                    prettyprint += (
-                        level*" " +
-                        k.title() +
-                        self._prettyprint(v, level=level+1) +
-                        "\n"
+                    prettyprint += "{}{}:\t{}\n".format(
+                        level*" ", k.title(), self._prettyprint(v, level=level+1)
                     )
             elif type(value) == list:
                 for v in value:
-                    prettyprint += (
-                        level*" " +
-                        self._prettyprint(v, level=level+1) +
-                        "\n"
+                    prettyprint += "{}{}\n".format(
+                        level*" ", self._prettyprint(v, level=level+1)
                     )
             elif type(value) == str:
-                prettyprint += "{}\n".format(value)
+                prettyprint += "\t{}\n".format(value)
         except Exception as exception:
             msg = "failed to return prettyprint:{}".format(exception)
             raise RuntimeError(msg)
