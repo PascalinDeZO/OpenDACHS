@@ -464,7 +464,26 @@ class TicketManager(object):
         :returns: number of removed tickets
         :rtype: int
         """
-        return 0
+        try:
+            logger = logging.getLogger().getChild(self.remove_expired.__name__)
+            sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
+            rows = sqlite_client.select_rows(
+                "timestamp", ("date('now', '-3 day')")
+            )
+            tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
+            counter = 0
+            for ticket in tickets:
+                if ticket.flag == "submitted":
+                    os.unlink(ticket.archive)
+                    sqlite_client.delete("ticket", [(ticket.id_)])
+                    ticket.flag = "deleted"
+                    self.dump_ticket(ticket)
+                    self.sendmail(ticket, "expired")
+                    counter += 1
+        except Exception as exception:
+            msg = "failed to remove expired OpenDACHS tickets:{}".format(exception)
+            raise RuntimeError(msg)
+        return counter
 
     def manage(self):
         """Manage OpenDACHS tickets."""
