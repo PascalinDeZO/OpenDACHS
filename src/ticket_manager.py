@@ -473,7 +473,7 @@ class TicketManager(object):
             tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
             counter = 0
             for ticket in tickets:
-                if ticket.flag == "submitted":
+                if ticket.flag == "pending":
                     os.unlink(ticket.archive)
                     sqlite_client.delete("ticket", [(ticket.id_)])
                     ticket.flag = "deleted"
