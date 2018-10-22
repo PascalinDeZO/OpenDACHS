@@ -30,12 +30,11 @@ import random
 import string
 import logging
 import datetime
-import subprocess
+import collections
 
 # third party imports
-import requests
-
 import warcio
+import requests
 
 # library specific imports
 import src.ftp
@@ -237,16 +236,19 @@ class TicketManager(object):
         try:
             filename = "info.ris"
             text = ""
-            tags = {
-                "resourceType": "TY",
-                "creator": "A{}",
-                "publicationDate": "DA",
-                "subjectHeading": "KW",
-                "personHeading": "KW",
-                "publisher": "PB",
-                "title": "T{}",
-                "url": "UR"
-            }
+            tags = collections.OrderedDict(
+                {
+                    "resourceType": "TY",
+                    "creator": "A{}",
+                    "publicationDate": "DA",
+                    "subjectHeading": "KW",
+                    "personHeading": "KW",
+                    "publisher": "PB",
+                    "title": "T{}",
+                    "url": "UR"
+                }
+
+            )
             field = "{tag}  - {value}\n"
             for key, tag in tags.items():
                 if key == "creator":
@@ -276,6 +278,11 @@ class TicketManager(object):
                             tag=tag.format(2),
                             value=ticket.metadata["title"]["script"]
                         )
+                elif key == "publisher":
+                    text += field.format(
+                        tag=tag,
+                        value = ticket.metadata[key]["romanization"]
+                    )
                 else:
                     text += field.format(
                         tag=tag, value=ticket.metadata[key]
