@@ -30,12 +30,11 @@ import random
 import string
 import logging
 import datetime
-import subprocess
+import collections
 
 # third party imports
-import requests
-
 import warcio
+import requests
 
 # library specific imports
 import src.ftp
@@ -182,21 +181,23 @@ class TicketManager(object):
             prettyprint = ""
             if type(value) == dict:
                 for k, v in value.items():
-                    prettyprint += (
-                        level*" " +
-                        k.title() +
-                        self._prettyprint(v, level=level+1) +
-                        "\n"
-                    )
+                    v = self._prettyprint(v, level=level+1)
+                    if v:
+                        prettyprint += "{level}{k}:\n{v}".format(
+                            level=level*"-",
+                            k=k.title(),
+                            v=v
+                        )
             elif type(value) == list:
                 for v in value:
-                    prettyprint += (
-                        level*" " +
-                        self._prettyprint(v, level=level+1) +
-                        "\n"
-                    )
+                    v = self._prettyprint(v, level=level+1)
+                    if v:
+                        prettyprint += v
             elif type(value) == str:
-                prettyprint += "{}\n".format(value)
+                if value:
+                    prettyprint += "{level}{v}\n".format(
+                        level=level*"-", v=value
+                    )
         except Exception as exception:
             msg = "failed to return prettyprint:{}".format(exception)
             raise RuntimeError(msg)
@@ -235,16 +236,18 @@ class TicketManager(object):
         try:
             filename = "info.ris"
             text = ""
-            tags = {
-                "resourceType": "TY",
-                "creator": "A{}",
-                "publicationDate": "DA",
-                "subjectHeading": "KW",
-                "personHeading": "KW",
-                "publisher": "PB",
-                "title": "T{}",
-                "url": "UR"
-            }
+            tags = collections.OrderedDict(
+                [
+                    ("resourceType", "TY"),
+                    ("creator", "A{}"),
+                    ("publicationDate", "DA"),
+                    ("subjectHeading", "KW"),
+                    ("personHeading", "KW"),
+                    ("publisher", "PB"),
+                    ("title", "T{}"),
+                    ("url", "UR")
+                ]
+            )
             field = "{tag}  - {value}\n"
             for key, tag in tags.items():
                 if key == "creator":
@@ -274,6 +277,11 @@ class TicketManager(object):
                             tag=tag.format(2),
                             value=ticket.metadata["title"]["script"]
                         )
+                elif key == "publisher":
+                    text += field.format(
+                        tag=tag,
+                        value = ticket.metadata[key]["romanization"]
+                    )
                 else:
                     text += field.format(
                         tag=tag, value=ticket.metadata[key]
@@ -470,13 +478,16 @@ class TicketManager(object):
             rows = sqlite_client.select_rows(
                 column="timestamp",
                 parameters=("date('now', '-3 day')",),
-                operator="<="
+                operator="<"
             )
             tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
             counter = 0
             for ticket in tickets:
                 if ticket.flag == "pending":
-                    logger.info("remove expired ticket %s", ticket.id_)
+                    logger.info(
+                        "remove expired ticket %s (timestamp %s)",
+                        ticket.id_, ticket.timestamp
+                    )
                     os.unlink(ticket.archive)
                     sqlite_client.delete("ticket", [(ticket.id_,)])
                     ticket.flag = "deleted"
@@ -484,7 +495,9 @@ class TicketManager(object):
                     self.sendmail(ticket, "expired")
                     counter += 1
         except Exception as exception:
-            msg = "failed to remove expired OpenDACHS tickets:{}".format(exception)
+            msg = "failed to remove expired OpenDACHS tickets:{}".format(
+                exception
+            )
             raise RuntimeError(msg)
         return counter
 
