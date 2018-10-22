@@ -328,7 +328,7 @@ class TicketManager(object):
                 if k not in ["email", "ticket", "flag"]
             }
             flag = data["flag"]
-            timestamp = datetime.datetime.now()
+            timestamp = datetime.datetime.today()
             ticket = src.ticket.Ticket(
                 id_, user, archive, metadata, flag, timestamp
             )
