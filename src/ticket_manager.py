@@ -237,17 +237,16 @@ class TicketManager(object):
             filename = "info.ris"
             text = ""
             tags = collections.OrderedDict(
-                {
-                    "resourceType": "TY",
-                    "creator": "A{}",
-                    "publicationDate": "DA",
-                    "subjectHeading": "KW",
-                    "personHeading": "KW",
-                    "publisher": "PB",
-                    "title": "T{}",
-                    "url": "UR"
-                }
-
+                [
+                    ("resourceType", "TY"),
+                    ("creator", "A{}"),
+                    ("publicationDate", "DA"),
+                    ("subjectHeading", "KW"),
+                    ("personHeading", "KW"),
+                    ("publisher", "PB"),
+                    ("title", "T{}"),
+                    ("url", "UR")
+                ]
             )
             field = "{tag}  - {value}\n"
             for key, tag in tags.items():
