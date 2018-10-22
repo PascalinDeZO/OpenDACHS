@@ -477,7 +477,7 @@ class TicketManager(object):
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             rows = sqlite_client.select_rows(
                 column="timestamp",
-                parameters=("date('now', '-3 day')",),
+                parameters=("date('now', '-3 days')",),
                 operator="<"
             )
             tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
