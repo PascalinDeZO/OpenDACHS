@@ -329,7 +329,7 @@ class TicketManager(object):
             }
             flag = data["flag"]
             today = datetime.datetime.today()
-            timestamp = datetime.datetime(today.year, today.month, today.day)
+            timestamp = datetime.datetime.now()
             ticket = src.ticket.Ticket(
                 id_, user, archive, metadata, flag, timestamp
             )
@@ -476,9 +476,10 @@ class TicketManager(object):
         try:
             logger = logging.getLogger().getChild(self.remove_expired.__name__)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
+            parameters=(datetime.datetime.now() - datetime.timedelta(days=3),)
             rows = sqlite_client.select_rows(
                 column="timestamp",
-                parameters=("date('now', '-3 days')",),
+                parameters=parameters,
                 operator="<"
             )
             tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
