@@ -35,6 +35,7 @@ import collections
 # third party imports
 import warcio
 import requests
+import cfscrape
 
 # library specific imports
 import src.ftp
@@ -122,7 +123,8 @@ class TicketManager(object):
         try:
             fp = open(ticket.archive, mode="wb")
             warc_writer = warcio.warcwriter.WARCWriter(fp)
-            response = requests.get(ticket.metadata["url"])
+            scraper = cfscrape.create_scraper()
+            response = scraper.get(ticket.metadata["url"])
             if response.status_code != 200:
                 msg = "failed to archive {}:HTTP status code {}".format(
                     ticket.metadata["url"],
