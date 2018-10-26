@@ -34,7 +34,6 @@ import collections
 
 # third party imports
 import warcio
-import requests
 import cfscrape
 
 # library specific imports
@@ -282,7 +281,7 @@ class TicketManager(object):
                 elif key == "publisher":
                     text += field.format(
                         tag=tag,
-                        value = ticket.metadata[key]["romanization"]
+                        value=ticket.metadata[key]["romanization"]
                     )
                 else:
                     text += field.format(
@@ -477,7 +476,9 @@ class TicketManager(object):
         try:
             logger = logging.getLogger().getChild(self.remove_expired.__name__)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
-            parameters=(datetime.datetime.now() - datetime.timedelta(days=3),)
+            parameters = (
+                datetime.datetime.now() - datetime.timedelta(days=3),
+            )
             rows = sqlite_client.select_rows(
                 column="timestamp",
                 parameters=parameters,
