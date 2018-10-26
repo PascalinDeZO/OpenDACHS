@@ -1,11 +1,11 @@
-Your OpenDACHS request {ticket} has been submitted and is pending confirmation.
+Your OpenDACHS request {{ ticket }} has been submitted and is pending confirmation.
 Please verify the metadata in the attachment, as well as the WARC archive and
 confirm by visiting [1].
 
 You can view the WARC archive by visiting [2] and logging in with
 
-{username} (username)
-{password} (password).
+{{ username }} (username)
+{{ password }} (password).
 
 [1]
 [2]

@@ -28,29 +28,39 @@ import email.mime.text
 import email.mime.multipart
 
 # third party imports
+import jinja2
+
 # library specific imports
 
 
-def read_in_template(name):
-    """Read email template in.
+def _load_templates():
+    """Load email templates.
 
-    :param str name: name of email template to read in
-
-    :returns: email template
-    :rtype: str
+    :returns: email template loader
+    :rtype: FileSystemLoader
     """
     try:
-        fp = open("templates/{}.txt".format(name))
-        template = fp.read()
-    except OSError as exception:
-        msg = "failed to open file templates/{}.txt:{}".format(name, exception)
-        raise RuntimeError(msg)
+        loader = jinja2.FileSystemLoader("templates/")
     except Exception as exception:
-        msg = "failed to read email template in:{}".format(exception)
+        msg = "failed to load email templates:{}".format(exception)
         raise RuntimeError(msg)
-    finally:
-        if "fp" in locals():
-            fp.close()
+    return loader
+
+
+def load_template(name):
+    """Load email template.
+
+    :param str name: name of email template
+
+    :returns: email template
+    :rtype: Template
+    """
+    try:
+        loader = _load_templates()
+        template = loader.load(jinja2.Environment(), name)
+    except Exception as exception:
+        msg = "failed to load email template:{}".format(exception)
+        raise RuntimeError(msg)
     return template
 
 
@@ -65,8 +75,8 @@ def compose_body(name, *args, **kwargs):
     :rtype: MIMEText
     """
     try:
-        template = read_in_template(name)
-        body = template.format(*args, **kwargs)
+        template = load_template(name)
+        body = template.render(*args, **kwargs)
         body = email.mime.text.MIMEText(body)
     except Exception as exception:
         msg = "failed to compose email body:{}".format(exception)
