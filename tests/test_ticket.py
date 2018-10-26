@@ -29,6 +29,9 @@ import json
 import src.ticket
 
 
+# TODO add hypothesis
+
+
 class TestTicket(unittest.TestCase):
     """OpenDACHS ticket tests."""
 
@@ -42,16 +45,20 @@ class TestTicket(unittest.TestCase):
         )
         return
 
+    def test_get_row_00(self):
+        """Test method to get SQLite row."""
+        row = self.ticket.get_row()
+        self.assertEqual(row[0], self.ticket.id_)
+        self.assertEqual(row[1], json.dumps(list(self.ticket.user)))
+        self.assertEqual(row[2], self.ticket.archive)
+        self.assertEqual(row[3], json.dumps(self.ticket.metadata))
+        self.assertEqual(row[4], self.ticket.flag)
+        self.assertEqual(row[5], self.ticket.timestamp)
+        return
+
     def test_get_ticket_00(self):
         """Test method to get OpenDACHS ticket based on SQLite row."""
-        row = (
-            self.ticket.id_,
-            json.dumps(list(self.ticket.user)),
-            self.ticket.archive,
-            json.dumps(self.ticket.metadata),
-            self.ticket.flag,
-            self.ticket.timestamp
-        )
+        row = self.ticket.get_row()
         ticket = self.ticket.get_ticket(row)
         self.assertEqual(self.ticket.id_, ticket.id_)
         self.assertEqual(self.ticket.user, ticket.user)
