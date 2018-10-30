@@ -134,7 +134,7 @@ class TicketManager(object):
             else:
                 headers = response.raw.headers.items()
                 status_line = "200 OK"
-                protocol = "HTTP/1.x"
+                protocol = "HTTP/1.0"
                 status_and_headers = warcio.statusandheaders.StatusAndHeaders(
                     status_line, headers, protocol=protocol
                 )
