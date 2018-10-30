@@ -33,7 +33,8 @@ import datetime
 import collections
 
 # third party imports
-import warcio.capture_http
+import warcio
+import requests
 import cfscrape
 
 # library specific imports
@@ -120,9 +121,30 @@ class TicketManager(object):
         :param Ticket ticket: OpenDACHS ticket
         """
         try:
+            fp = open(ticket.archive, mode="wb")
+            warc_writer = warcio.warcwriter.BufferWARCWriter(fp)
             scraper = cfscrape.create_scraper()
-            with warcio.capture_http.capture_http(ticket.archive):
-                response = scraper.get(ticket.metadata["url"])
+            response = scraper.get(ticket.metadata["url"], stream=True)
+            if response.status_code != 200:
+                msg = "failed to archive {}:HTTP status code {}".format(
+                    ticket.metadata["url"],
+                    response.status_code
+                )
+                raise RuntimeError(msg)
+            else:
+                headers = response.raw.headers.items()
+                status_line = "200 OK"
+                protocol = "HTTP/1.0"
+                status_and_headers = warcio.statusandheaders.StatusAndHeaders(
+                    status_line, headers, protocol=protocol
+                )
+                warc_record = warc_writer.create_warc_record(
+                    ticket.metadata["url"],
+                    "response",
+                    payload=io.BytesIO(response.content),
+                    http_headers=status_and_headers
+                )
+                warc_writer.write_record(warc_record)
         except RuntimeError:
             raise
         except Exception as exception:
