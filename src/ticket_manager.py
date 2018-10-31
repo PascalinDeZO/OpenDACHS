@@ -21,7 +21,6 @@
 
 
 # standard library imports
-import io
 import os
 import re
 import json
@@ -169,8 +168,6 @@ class TicketManager(object):
                 image_urls = self._get_image_urls(response)
                 for image_url in image_urls:
                     scraper.get(image_url)
-        except StopIteration:
-            pass
         except RuntimeError:
             raise
         except Exception as exception:
