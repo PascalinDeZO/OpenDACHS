@@ -126,6 +126,8 @@ class TicketManager(object):
         try:
             if img.startswith(("https", "http")):
                 image_url = img
+            elif img.startswith("//"):
+                image_url = "http://{}".format(img)
             elif img.startswith("/"):
                 parse_result = urllib.parse.urlparse(url)
                 image_url = "{}://{}{}".format(
@@ -148,7 +150,7 @@ class TicketManager(object):
         try:
             soup = bs4.BeautifulSoup(response.content)
             for img in soup.find_all("img"):
-                yield(self._get_image_url(response.request.url, img.src))
+                yield(self._get_image_url(response.request.url, img["src"]))
         except Exception as exception:
             msg = "failed to get image URLs: {}".format(exception)
             raise RuntimeError(msg)
@@ -165,7 +167,8 @@ class TicketManager(object):
             with warcio.capture_http.capture_http(ticket.archive):
                 response = scraper.get(ticket.metadata["url"])
                 image_urls = self._get_image_urls(response)
-                scraper.get(next(image_urls))
+                for image_url in image_urls:
+                    scraper.get(image_url)
         except StopIteration:
             pass
         except RuntimeError:
