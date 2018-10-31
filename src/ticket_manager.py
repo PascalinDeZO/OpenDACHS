@@ -21,7 +21,6 @@
 
 
 # standard library imports
-import io
 import os
 import re
 import json
@@ -31,9 +30,11 @@ import string
 import logging
 import datetime
 import collections
+import urllib.parse
 
 # third party imports
-import warcio
+import bs4
+import warcio.capture_http
 import cfscrape
 
 # library specific imports
@@ -112,7 +113,48 @@ class TicketManager(object):
         return password
 
     @staticmethod
-    def archive(ticket):
+    def _get_image_url(url, img):
+        """Get image URL.
+
+        :param str url: URL
+        :param str img: image
+
+        :returns: image URL
+        :rtype: str
+        """
+        try:
+            if img.startswith(("https", "http")):
+                image_url = img
+            elif img.startswith("//"):
+                image_url = "http://{}".format(img)
+            elif img.startswith("/"):
+                parse_result = urllib.parse.urlparse(url)
+                image_url = "{}://{}{}".format(
+                    parse_result.scheme,
+                    parse_result.hostname,
+                    img
+                )
+            else:
+                image_url = "{}/{}".format(url, img)
+        except Exception as exception:
+            msg = "failed to get image URL {}:{}".format(img, exception)
+            raise RuntimeError(msg)
+        return image_url
+
+    def _get_image_urls(self, response):
+        """Archive images.
+
+        :param Response response: response
+        """
+        try:
+            soup = bs4.BeautifulSoup(response.content)
+            for img in soup.find_all("img"):
+                yield(self._get_image_url(response.request.url, img["src"]))
+        except Exception as exception:
+            msg = "failed to get image URLs: {}".format(exception)
+            raise RuntimeError(msg)
+
+    def archive(self, ticket):
         """Archive URL.
 
         Code snippet see https://github.com/webrecorder/warcio
@@ -120,30 +162,12 @@ class TicketManager(object):
         :param Ticket ticket: OpenDACHS ticket
         """
         try:
-            fp = open(ticket.archive, mode="wb")
-            warc_writer = warcio.warcwriter.WARCWriter(fp)
             scraper = cfscrape.create_scraper()
-            response = scraper.get(ticket.metadata["url"])
-            if response.status_code != 200:
-                msg = "failed to archive {}:HTTP status code {}".format(
-                    ticket.metadata["url"],
-                    response.status_code
-                )
-                raise RuntimeError(msg)
-            else:
-                headers = response.raw.headers.items()
-                status_line = "200 OK"
-                protocol = "HTTP/1.x"
-                status_and_headers = warcio.statusandheaders.StatusAndHeaders(
-                    status_line, headers, protocol=protocol
-                )
-                warc_record = warc_writer.create_warc_record(
-                    ticket.metadata["url"],
-                    "response",
-                    payload=io.BytesIO(response.content),
-                    http_headers=status_and_headers
-                )
-                warc_writer.write_record(warc_record)
+            with warcio.capture_http.capture_http(ticket.archive):
+                response = scraper.get(ticket.metadata["url"])
+                image_urls = self._get_image_urls(response)
+                for image_url in image_urls:
+                    scraper.get(image_url)
         except RuntimeError:
             raise
         except Exception as exception:
