@@ -31,6 +31,7 @@ import string
 import logging
 import datetime
 import collections
+import urllib.parse
 
 # third party imports
 import bs4
@@ -113,18 +114,43 @@ class TicketManager(object):
         return password
 
     @staticmethod
-    def _archive_images(response):
+    def _get_image_url(url, img):
+        """Get image URL.
+
+        :param str url: URL
+        :param str img: image
+
+        :returns: image URL
+        :rtype: str
+        """
+        try:
+            if img.startswith(("https", "http")):
+                image_url = img
+            elif img.startswith("/"):
+                parse_result = urllib.parse.urlparse(url)
+                image_url = "{}://{}{}".format(
+                    parse_result.scheme,
+                    parse_result.hostname,
+                    img
+                )
+            else:
+                image_url = "{}/{}".format(url, img)
+        except Exception as exception:
+            msg = "failed to get image URL {}:{}".format(img, exception)
+            raise RuntimeError(msg)
+        return image_url
+
+    def _get_image_urls(self, response):
         """Archive images.
 
         :param Response response: response
         """
         try:
-            scraper = cfscrape.create_scraper()
             soup = bs4.BeautifulSoup(response.content)
             for img in soup.find_all("img"):
-                yield scraper.get(img.src)
+                yield(self._get_image_url(response.request.url, img.src))
         except Exception as exception:
-            msg = "failed to archive image: {}".format(exception)
+            msg = "failed to get image URLs: {}".format(exception)
             raise RuntimeError(msg)
 
     def archive(self, ticket):
@@ -138,7 +164,10 @@ class TicketManager(object):
             scraper = cfscrape.create_scraper()
             with warcio.capture_http.capture_http(ticket.archive):
                 response = scraper.get(ticket.metadata["url"])
-                self._archive_images(response)
+                image_urls = self._get_image_urls(response)
+                scraper.get(next(image_urls))
+        except StopIteration:
+            pass
         except RuntimeError:
             raise
         except Exception as exception:
