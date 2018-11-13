@@ -37,7 +37,7 @@ class Ticket(object):
     """OpenDACHS ticket.
 
     :ivar User user: Webrecorder user
-    :ivar str archive WARC archive filename
+    :ivar str archive: WARC archive filename
     :ivar dict metadata: WARC archive metadata
     :ivar str flag: status flag
     """
