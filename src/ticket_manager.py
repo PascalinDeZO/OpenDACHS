@@ -80,6 +80,8 @@ class TicketManager(object):
         :rtype: str
         """
         try:
+            if length < 1:
+                raise ValueError("length < 1")
             alphabet = string.ascii_letters + string.digits
             username = "".join(
                 random.choice(alphabet) for _ in range(length)
@@ -102,6 +104,8 @@ class TicketManager(object):
         :rtype: str
         """
         try:
+            if length < 1:
+                raise ValueError("length < 1")
             alphabet = string.ascii_letters + string.digits
             password = "".join(
                 alphabet[ord(char) % len(alphabet)]
@@ -113,33 +117,31 @@ class TicketManager(object):
         return password
 
     @staticmethod
-    def _get_url(url, src):
+    def _get_url(url, base_src_url):
         """Get absolute src URL.
 
         :param str url: request URL
-        :param str src: src
+        :param str base_src_url: base src URL
 
         :returns: absolute src URL
         :rtype: str
         """
         try:
-            if src.startswith(("https", "http")):
-                src_url = src
-            elif src.startswith("//"):
-                src_url = "http://{}".format(src)
-            elif src.startswith("/"):
+            if base_src_url.startswith(("https", "http")):
+                abs_src_url = base_src_url
+            elif base_src_url.startswith("/"):
                 parse_result = urllib.parse.urlparse(url)
-                src_url = "{}://{}{}".format(
+                abs_src_url = "{}://{}{}".format(
                     parse_result.scheme,
                     parse_result.hostname,
-                    src
+                    base_src_url
                 )
             else:
-                src_url = "{}/{}".format(url, src)
+                abs_src_url = "{}/{}".format(url, base_src_url)
         except Exception as exception:
-            msg = "failed to get absolute src URL {}:{}".format(src, exception)
+            msg = "failed to get absolute src URL {}:{}".format(base_src_url, exception)
             raise RuntimeError(msg)
-        return src_url
+        return abs_src_url
 
     def _get_image_urls(self, response):
         """Archive images.
