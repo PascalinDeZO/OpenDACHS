@@ -16,7 +16,7 @@
 
 
 """
-:synopsis: OpenDACHS ticket tests.
+:synopsis: OpenDACHS ticket test cases.
 """
 
 # standard library imports
@@ -29,24 +29,27 @@ import json
 import src.ticket
 
 
-# TODO add hypothesis
-
-
 class TestTicket(unittest.TestCase):
-    """OpenDACHS ticket tests."""
+    """OpenDACHS ticket test cases."""
 
-    @classmethod
-    def setUpClass(cls):
-        """Set test case up."""
+    def setUp(self):
+        """Set test cases up."""
+        id_ = "id_"
         user = src.ticket.User("username", "role", "password", "email_addr")
+        archive = "archive"
+        metadata = {}
+        flag = "flag"
         timestamp = datetime.datetime.now()
-        cls.ticket = src.ticket.Ticket(
-            "id_", user, "archive", {}, "flag", timestamp
+        self.ticket = src.ticket.Ticket(
+            id_, user, archive, metadata, flag, timestamp
         )
-        return
 
-    def test_get_row_00(self):
-        """Test method to get SQLite row."""
+    def test_get_row(self):
+        """Get SQLite row.
+
+        Trying: initialised OpenDACHS ticket (setUp method)
+        Expecting: corresponding SQLite row
+        """
         row = self.ticket.get_row()
         self.assertEqual(row[0], self.ticket.id_)
         self.assertEqual(row[1], json.dumps(list(self.ticket.user)))
@@ -54,10 +57,13 @@ class TestTicket(unittest.TestCase):
         self.assertEqual(row[3], json.dumps(self.ticket.metadata))
         self.assertEqual(row[4], self.ticket.flag)
         self.assertEqual(row[5], self.ticket.timestamp)
-        return
 
-    def test_get_ticket_00(self):
-        """Test method to get OpenDACHS ticket based on SQLite row."""
+    def test_get_ticket(self):
+        """Get OpenDACHS ticket based on SQLite row.
+
+        Trying: output of get_row method (validated)
+        Expecting: corresponding OpenDACHS ticket
+        """
         row = self.ticket.get_row()
         ticket = self.ticket.get_ticket(row)
         self.assertEqual(self.ticket.id_, ticket.id_)
@@ -66,10 +72,13 @@ class TestTicket(unittest.TestCase):
         self.assertEqual(self.ticket.metadata, ticket.metadata)
         self.assertEqual(self.ticket.flag, ticket.flag)
         self.assertEqual(self.ticket.timestamp, ticket.timestamp)
-        return
 
-    def test_get_json_00(self):
-        """Test method to get JSON formatted string."""
+    def test_get_json(self):
+        """Get JSON formatted string.
+
+        Trying: initialised OpenDACHS ticket (setUP method)
+        Expecting: corresponding JSON formatted string
+        """
         json_string = self.ticket.get_json()
         python_obj = json.loads(json_string)
         self.assertEqual(python_obj["id"], self.ticket.id_)
@@ -80,4 +89,3 @@ class TestTicket(unittest.TestCase):
         self.assertEqual(
             python_obj["timestamp"], self.ticket.timestamp.isoformat()
         )
-        return

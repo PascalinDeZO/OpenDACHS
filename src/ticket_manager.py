@@ -80,6 +80,8 @@ class TicketManager(object):
         :rtype: str
         """
         try:
+            if length < 1:
+                raise ValueError("length < 1")
             alphabet = string.ascii_letters + string.digits
             username = "".join(
                 random.choice(alphabet) for _ in range(length)
@@ -102,6 +104,8 @@ class TicketManager(object):
         :rtype: str
         """
         try:
+            if length < 1:
+                raise ValueError("length < 1")
             alphabet = string.ascii_letters + string.digits
             password = "".join(
                 alphabet[ord(char) % len(alphabet)]
@@ -113,33 +117,31 @@ class TicketManager(object):
         return password
 
     @staticmethod
-    def _get_image_url(url, img):
-        """Get image URL.
+    def _get_url(url, base_src_url):
+        """Get absolute src URL.
 
-        :param str url: URL
-        :param str img: image
+        :param str url: request URL
+        :param str base_src_url: base src URL
 
-        :returns: image URL
+        :returns: absolute src URL
         :rtype: str
         """
         try:
-            if img.startswith(("https", "http")):
-                image_url = img
-            elif img.startswith("//"):
-                image_url = "http://{}".format(img)
-            elif img.startswith("/"):
+            if base_src_url.startswith(("https", "http")):
+                abs_src_url = base_src_url
+            elif base_src_url.startswith("/"):
                 parse_result = urllib.parse.urlparse(url)
-                image_url = "{}://{}{}".format(
+                abs_src_url = "{}://{}{}".format(
                     parse_result.scheme,
                     parse_result.hostname,
-                    img
+                    base_src_url
                 )
             else:
-                image_url = "{}/{}".format(url, img)
+                abs_src_url = "{}/{}".format(url, base_src_url)
         except Exception as exception:
-            msg = "failed to get image URL {}:{}".format(img, exception)
+            msg = "failed to get absolute src URL {}:{}".format(base_src_url, exception)
             raise RuntimeError(msg)
-        return image_url
+        return abs_src_url
 
     def _get_image_urls(self, response):
         """Archive images.
@@ -149,9 +151,22 @@ class TicketManager(object):
         try:
             soup = bs4.BeautifulSoup(response.content)
             for img in soup.find_all("img"):
-                yield(self._get_image_url(response.request.url, img["src"]))
+                yield(self._get_url(response.request.url, img["src"]))
         except Exception as exception:
             msg = "failed to get image URLs: {}".format(exception)
+            raise RuntimeError(msg)
+
+    def _get_media_urls(self, response):
+        """Get media URLs.
+
+        :param Response response: response
+        """
+        try:
+            soup = bs4.BeautifulSoup(response.content)
+            for source in soup.find_all("source"):
+                yield(self._get_url(response.request.url, source["src"]))
+        except Exception as exception:
+            msg = "failed to get media URLs: {}".format(exception)
             raise RuntimeError(msg)
 
     def archive(self, ticket):
@@ -168,6 +183,9 @@ class TicketManager(object):
                 image_urls = self._get_image_urls(response)
                 for image_url in image_urls:
                     scraper.get(image_url)
+                media_urls = self._get_media_urls(response)
+                for media_url in media_urls:
+                    scraper.get(media_url)
         except RuntimeError:
             raise
         except Exception as exception:
