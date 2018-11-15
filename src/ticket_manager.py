@@ -31,6 +31,7 @@ import logging
 import datetime
 import collections
 import urllib.parse
+import subprocess
 
 # third party imports
 import bs4
@@ -547,6 +548,26 @@ class TicketManager(object):
             raise RuntimeError(msg)
         return counter
 
+    def call_api(self):
+        """Call Webrecorder API."""
+        args = [
+            "docker", "exec", "-it", "webrecorder_app_1",
+            "python3", "-m", "webrecorder.opendachs"
+        ]
+        child = subprocess.Popen(args, stderr=subprocess.PIPE)
+        while True:
+            returncode = child.poll()
+            if returncode is None:
+                continue
+            else:
+                break
+        if child.returncode != 0:
+            raise RuntimeError(
+                "failed to call Webrecorder API: exit status {}".format(
+                    child.returncode
+                )
+            )
+
     def manage(self):
         """Manage OpenDACHS tickets."""
         try:
@@ -586,6 +607,7 @@ class TicketManager(object):
                     if "fp" in locals():
                         fp.close()
             managed[4] += self.remove_expired()
+            self.call_api()
             logger.info("submitted %d new tickets", managed[0])
             logger.info("confirmed %d tickets", managed[1])
             logger.info("accepted %d tickets", managed[2])
