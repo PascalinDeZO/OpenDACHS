@@ -607,7 +607,13 @@ class TicketManager(object):
                     if "fp" in locals():
                         fp.close()
             managed[4] += self.remove_expired()
-            self.call_api()
+            try:
+                self.call_api()
+            except RuntimeError as exception:
+                logger.warning(
+                    "failed to call Webrecorder API:%s",
+                    exception
+                )
             logger.info("submitted %d new tickets", managed[0])
             logger.info("confirmed %d tickets", managed[1])
             logger.info("accepted %d tickets", managed[2])
