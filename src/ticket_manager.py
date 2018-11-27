@@ -476,7 +476,9 @@ class TicketManager(object):
             ticket = src.ticket.Ticket.get_ticket(row)
             storage = "storage/{ticket}".format(ticket=ticket.id_)
             shutil.copytree(
-                "./../webrecorder/data/warcs/{ticket}".format(ticket=ticket.id_),
+                "./../webrecorder/data/warcs/{user}".format(
+                    user=ticket.user
+                ),
                 storage
             )
             os.unlink(ticket.archive)
