@@ -477,7 +477,7 @@ class TicketManager(object):
             storage = "storage/{ticket}".format(ticket=ticket.id_)
             shutil.copytree(
                 "./../webrecorder/data/warcs/{user}".format(
-                    user=ticket.user
+                    user=ticket.user.username
                 ),
                 storage
             )
