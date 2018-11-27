@@ -25,6 +25,7 @@ import os
 import re
 import json
 import base64
+import shutil
 import random
 import string
 import logging
@@ -473,8 +474,13 @@ class TicketManager(object):
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
-            archive = "storage/{}.warc".format(data["ticket"])
-            os.rename(ticket.archive, archive)
+            storage = "storage/{}.warc.gz".format(data["ticket"])
+            shutil.copy(
+                "./../webrecorder/data/storage/{ticket}/{warc}.warc.gz".format(
+                    ticket=ticket.id, warc="*"),
+                storage
+            )
+            os.unlink(ticket.archive)
             logger.info("moved WARC %s to storage", ticket.archive)
             sqlite_client.delete("ticket", [(data["ticket"],)])
             logger.info("deleted ticket %s", data["ticket"])
