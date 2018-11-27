@@ -474,15 +474,15 @@ class TicketManager(object):
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
-            storage = "storage/{ticket}".format(ticket=ticket.id)
+            storage = "storage/{ticket}".format(ticket=ticket.id_)
             shutil.copytree(
-                "./../webrecorder/data/warcs/{ticket}".format(ticket=ticket.id),
+                "./../webrecorder/data/warcs/{ticket}".format(ticket=ticket.id_),
                 storage
             )
             os.unlink(ticket.archive)
             logger.info("moved WARC %s to storage", ticket.archive)
-            sqlite_client.delete("ticket", [(ticket.id,)])
-            logger.info("deleted ticket %s", ticket.id)
+            sqlite_client.delete("ticket", [(ticket.id_,)])
+            logger.info("deleted ticket %s", ticket.id_)
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
             self.sendmail(ticket, "accepted")
