@@ -151,7 +151,7 @@ class TicketManager(object):
         :param Response response: response
         """
         try:
-            soup = bs4.BeautifulSoup(response.content)
+            soup = bs4.BeautifulSoup(response.content, features="html.parser")
             for img in soup.find_all("img"):
                 yield(self._get_url(response.request.url, img["src"]))
         except Exception as exception:
@@ -164,9 +164,12 @@ class TicketManager(object):
         :param Response response: response
         """
         try:
-            soup = bs4.BeautifulSoup(response.content)
+            soup = bs4.BeautifulSoup(response.content, features="html.parser")
             for source in soup.find_all("source"):
-                yield(self._get_url(response.request.url, source["src"]))
+                if "src" in source.attrs:
+                    yield(self._get_url(response.request.url, source["src"]))
+                elif "srcset" in source.attrs:
+                    yield(self._get_url(response.request.url, source["srcset"]))
         except Exception as exception:
             msg = "failed to get media URLs: {}".format(exception)
             raise RuntimeError(msg)

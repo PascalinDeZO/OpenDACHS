@@ -22,14 +22,47 @@
 # standard library imports
 import unittest
 import random
+import configparser
 
 # third party imports
+import requests
+
 # library specific imports
 import src.ticket_manager
 
 
 class TestTicketManager(unittest.TestCase):
-    """OpenDACHS ticket manager test cases."""
+    """OpenDACHS ticket manager test cases.
+
+    :ivar TicketManager ticket_manager: OpenDACHS ticket manager
+    """
+
+    def setUp(self):
+        """Set test cases up."""
+        ftp = configparser.ConfigParser()
+        ftp.read_dict({})
+        smtp = configparser.ConfigParser()
+        smtp.read_dict({})
+        sqlite = configparser.ConfigParser()
+        sqlite.read_dict(
+            {
+                "SQLite": {
+                    "database": ":memory:",
+                    "table": "tickets",
+                },
+                "column_defs": {
+                    "ticket": "TEXT PRIMARY KEY",
+                    "user": "TEXT",
+                    "archive": "TEXT",
+                    "metadata": "TEXT",
+                    "flag": "TEXT",
+                    "timestamp": "TIMESTAMP"
+                }
+            }
+        )
+        self.ticket_manager = src.ticket_manager.TicketManager(
+            ftp, smtp, sqlite
+        )
 
     def test_generate_username_default(self):
         """Generate Webrecorder username.
@@ -148,3 +181,95 @@ class TestTicketManager(unittest.TestCase):
             url, base_src_url
         )
         self.assertEqual(url+"/"+base_src_url, abs_src_url)
+
+    def test_get_img_urls(self):
+        """Archive images.
+
+        Trying: url = http://foo.com/bar and src one of
+        https://baz.com, http://baz.com, /baz and baz
+        Expecting: corresponding absolute src URLs
+        """
+        src = ["https://baz.com", "http://baz.com", "/baz", "baz"]
+        abs_src = [
+            src[0],
+            src[1],
+            "http://foo.com"+src[2],
+            "http://foo.com/bar/"+src[3]
+        ]
+        img = "".join(
+            "<img src='{src}' alt='alt'>".format(src=value)
+            for value in src
+        )
+        request = requests.Request(url="http://foo.com/bar")
+        response = requests.Response()
+        response._content = "<html>{img}</html>".format(img=img)
+        response.request = request
+        self.assertEqual(
+            abs_src,
+            list(self.ticket_manager._get_image_urls(response))
+        )
+
+    def test_get_media_urls(self):
+        """Get media URLs.
+
+        Trying: url = http://foo.com/bar and source one of
+        <source src='baz'> and <source srcset='baz'>
+        Expecting: corresponding absolute src URLs
+        """
+        url = "http://foo.com/bar"
+        content = "".join(
+            ["<source src='baz'>", "<source srcset='baz'>"]
+        )
+        abs_src = url+"/baz"
+        request = requests.Request(url=url)
+        response = requests.Response()
+        response._content = content
+        response.request = request
+        self.assertEqual(
+            [abs_src, abs_src],
+            list(self.ticket_manager._get_media_urls(response))
+        )
+
+    def test_initialize_user(self):
+        """Initialize Webrecorder user.
+
+        Trying: email_addr = foo@bar.com
+        Expecting: [A-Za-z0-9]{8} matches username, role = archivist,
+        [A-Za-z0-9]{16} matches password and email_addr = foo@bar.com
+        """
+        email_addr = "foo@bar.com"
+        user = self.ticket_manager._initialize_user({"email": email_addr})
+        self.assertRegex(user.username, r"[A-Za-z0-9]{8}")
+        self.assertEqual("archivist", user.role)
+        self.assertRegex(user.password, r"[A-Za-z0-9]{16}")
+        self.assertEqual(email_addr, user.email_addr)
+
+    def test_initialize_ticket(self):
+        """Initialize OpenDACHS ticket.
+
+        Trying: ticket = ABCabc123, email_addr = foo@bar.com,
+        foo = 1, bar = 2, baz = 3 and flag = flag
+        Expecting: corresponding OpenDACHS ticket
+        """
+        data = {
+            "ticket": "ABCabc123",
+            "email": "foo@bar.com",
+            "foo": 1,
+            "bar": 2,
+            "baz": 3,
+            "flag": "flag"
+        }
+        archive = "tmp/warcs/{ticket}.warc".format(ticket=data["ticket"])
+        ticket = self.ticket_manager._initialize_ticket(data)
+        self.assertEqual(data["ticket"], ticket.id_)
+        self.assertEqual(data["email"], ticket.user.email_addr)
+        self.assertEqual(archive, ticket.archive)
+        self.assertEqual(
+            {
+                "foo": data["foo"],
+                "bar": data["bar"],
+                "baz": data["baz"]
+            }, ticket.metadata
+        )
+        self.assertEqual(data["flag"], ticket.flag)
+        self.assertTrue(hasattr(ticket, "timestamp"))
