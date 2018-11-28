@@ -33,21 +33,21 @@ import jinja2
 # library specific imports
 
 
-def _load_templates():
+def _load_templates(path="templates"):
     """Load email templates.
 
     :returns: email template loader
     :rtype: FileSystemLoader
     """
     try:
-        loader = jinja2.FileSystemLoader("templates/")
+        loader = jinja2.FileSystemLoader(path)
     except Exception as exception:
         msg = "failed to load email templates:{}".format(exception)
         raise RuntimeError(msg)
     return loader
 
 
-def load_template(name):
+def load_template(name, path="templates"):
     """Load email template.
 
     :param str name: name of email template
@@ -56,7 +56,7 @@ def load_template(name):
     :rtype: Template
     """
     try:
-        loader = _load_templates()
+        loader = _load_templates(path=path)
         template = loader.load(jinja2.Environment(), name)
     except Exception as exception:
         msg = "failed to load email template:{}".format(exception)
