@@ -411,13 +411,20 @@ class TicketManager(object):
                 )
             elif name == "error":
                 body = src.email.compose_body(name, ticket=ticket.id_)
-            email_msg = src.email.compose_msg(
-                self.smtp, ticket.user.email_addr, subject, body,
-                attachment=locals().get("attachment")
-            )
             if name in ["submitted", "accepted", "denied", "expired"]:
+                email_msg = src.email.compose_msg(
+                    self.smtp, ticket.user.email_addr, subject, body,
+                    attachment=locals().get("attachment")
+                )
                 src.email.sendmail(self.smtp, ticket.user.email_addr, email_msg)
             else:
+                email_msg = src.email.compose_msg(
+                    self.smtp,
+                    self.smtp["header_fields"]["reply_to"],
+                    subject,
+                    body,
+                    attachment=locals().get("attachment")
+                )
                 src.email.sendmail(
                     self.smtp, self.smtp["header_fields"]["reply_to"], email_msg
                 )
