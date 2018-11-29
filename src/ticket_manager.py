@@ -25,6 +25,7 @@ import os
 import re
 import json
 import base64
+import shutil
 import random
 import string
 import logging
@@ -150,7 +151,7 @@ class TicketManager(object):
         :param Response response: response
         """
         try:
-            soup = bs4.BeautifulSoup(response.content)
+            soup = bs4.BeautifulSoup(response.content, features="html.parser")
             for img in soup.find_all("img"):
                 yield(self._get_url(response.request.url, img["src"]))
         except Exception as exception:
@@ -163,9 +164,12 @@ class TicketManager(object):
         :param Response response: response
         """
         try:
-            soup = bs4.BeautifulSoup(response.content)
+            soup = bs4.BeautifulSoup(response.content, features="html.parser")
             for source in soup.find_all("source"):
-                yield(self._get_url(response.request.url, source["src"]))
+                if "src" in source.attrs:
+                    yield(self._get_url(response.request.url, source["src"]))
+                elif "srcset" in source.attrs:
+                    yield(self._get_url(response.request.url, source["srcset"]))
         except Exception as exception:
             msg = "failed to get media URLs: {}".format(exception)
             raise RuntimeError(msg)
@@ -473,11 +477,17 @@ class TicketManager(object):
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
-            archive = "storage/{}.warc".format(data["ticket"])
-            os.rename(ticket.archive, archive)
+            storage = "storage/{ticket}".format(ticket=ticket.id_)
+            shutil.copytree(
+                "./../webrecorder/data/warcs/{user}".format(
+                    user=ticket.user.username
+                ),
+                storage
+            )
+            os.unlink(ticket.archive)
             logger.info("moved WARC %s to storage", ticket.archive)
-            sqlite_client.delete("ticket", [(data["ticket"],)])
-            logger.info("deleted ticket %s", data["ticket"])
+            sqlite_client.delete("ticket", [(ticket.id_,)])
+            logger.info("deleted ticket %s", ticket.id_)
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
             self.sendmail(ticket, "accepted")
