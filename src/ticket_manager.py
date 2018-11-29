@@ -619,7 +619,8 @@ class TicketManager(object):
                     exception=exception
                 )
                 logger.warning(msg)
-                ticket = src.ticket.Ticket(filename, *(5*(None, )))
+                id_ = filename.split("/")[-1].strip(".json")
+                ticket = src.ticket.Ticket(id_, *(5*(None, )))
                 self.sendmail(ticket, "error")
             finally:
                 if "fp" in locals():
