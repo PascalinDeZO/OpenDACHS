@@ -577,7 +577,7 @@ class TicketManager(object):
         """Manage OpenDACHS tickets."""
         logger = logging.getLogger().getChild(self.manage.__name__)
         logger.info("retrieve ticket files")
-        files = src.ftp.retrieve_file(self.ftp)
+        files = src.ftp.retrieve_files(self.ftp)
         logger.info("retrieved %d tickets", len(files))
         submitted = confirmed = accepted = denied = removed = 0
         for filename in files:
