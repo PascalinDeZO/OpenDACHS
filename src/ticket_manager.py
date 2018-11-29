@@ -409,11 +409,18 @@ class TicketManager(object):
                     ticket=ticket.id_,
                     reply_to=self.smtp["header_fields"]["reply_to"]
                 )
+            elif name == "error":
+                body = src.email.compose_body(name, ticket=ticket.id_)
             email_msg = src.email.compose_msg(
                 self.smtp, ticket.user.email_addr, subject, body,
                 attachment=locals().get("attachment")
             )
-            src.email.sendmail(self.smtp, ticket.user.email_addr, email_msg)
+            if name in ["submitted", "accepted", "denied", "expired"]:
+                src.email.sendmail(self.smtp, ticket.user.email_addr, email_msg)
+            else:
+                src.email.sendmail(
+                    self.smtp, self.smtp["header_fields"]["reply_to"], email_msg
+                )
         except Exception as exception:
             msg = "failed to send email:{}".format(exception)
             raise RuntimeError(msg)
@@ -613,6 +620,8 @@ class TicketManager(object):
                         filename,
                         exception
                     )
+                    ticket = src.ticket.Ticket(filename, *(5*(None, )))
+                    self.sendmail(ticket, "error")
                 finally:
                     if "fp" in locals():
                         fp.close()
