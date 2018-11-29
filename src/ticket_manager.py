@@ -392,7 +392,7 @@ class TicketManager(object):
         :param str name: name of email template
         """
         try:
-            subject = "OpenDACHS Ticket {}".format(ticket.user.username)
+            subject = "OpenDACHS Ticket {}".format(ticket.id_)
             if name == "submitted" or name == "confirmed":
                 attachment = self.compose_plaintext_attachment(ticket)
                 body = src.email.compose_body(
