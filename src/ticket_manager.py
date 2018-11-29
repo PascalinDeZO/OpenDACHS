@@ -619,8 +619,8 @@ class TicketManager(object):
                     exception=exception
                 )
                 logger.warning(msg)
-                id_ = filename.split("/")[-1].strip(".json")
-                ticket = src.ticket.Ticket(id_, *(5*(None, )))
+                if "ticket" not in locals():
+                    ticket = src.ticket.Ticket("unknown", *(5*(None, )))
                 self.sendmail(ticket, "error")
             finally:
                 if "fp" in locals():
