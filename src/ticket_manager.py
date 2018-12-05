@@ -174,6 +174,22 @@ class TicketManager(object):
             msg = "failed to get media URLs: {}".format(exception)
             raise RuntimeError(msg)
 
+    def _get_css_urls(self, response):
+        """Get CSS URLs.
+
+        :param Response response: response
+        """
+        try:
+            soup = bs4.BeautifulSoup(response.content, features="html.parser")
+            header = soup.find("header")
+            for link in header.find_all("link"):
+                if link["rel"] == "stylesheet":
+                    if "href" in link.attrs:
+                        yield(self._get_url(response.request.url, link["href"]))
+        except Exception as exception:
+            msg = "failed to get CSS URLs: {}".format(exception)
+            raise RuntimeError(msg)
+
     def archive(self, ticket):
         """Archive URL.
 
@@ -191,6 +207,9 @@ class TicketManager(object):
                 media_urls = self._get_media_urls(response)
                 for media_url in media_urls:
                     scraper.get(media_url)
+                css_urls = self._get_css_urls(response)
+                for css_url in css_urls:
+                    scraper.get(css_url)
         except RuntimeError:
             raise
         except Exception as exception:
