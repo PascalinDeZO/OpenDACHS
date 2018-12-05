@@ -480,6 +480,9 @@ class TicketManager(object):
         """Submit new OpenDACHS ticket.
 
         :param dict data: OpenDACHS ticket
+
+        :returns: OpenDACHS ticket
+        :rtype: Ticket
         """
         logger = logging.getLogger().getChild(self.submit.__name__)
         try:
@@ -496,7 +499,7 @@ class TicketManager(object):
             raise RuntimeError(
                 "failed to submit OpenDACHS ticket"
             ) from exception
-        return
+        return ticket
 
     def confirm(self, data):
         """Confirm ticket.
