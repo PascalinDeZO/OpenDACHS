@@ -135,6 +135,11 @@ class TicketManager(object):
         try:
             if base_src_url.startswith(("https", "http")):
                 abs_src_url = base_src_url
+            elif base_src_url.startswith("//"):
+                parse_result = urllib.parse.urlparse(url)
+                abs_src_url = "{}:{}".format(
+                    parse_result.scheme, base_src_url
+                )
             elif base_src_url.startswith("/"):
                 parse_result = urllib.parse.urlparse(url)
                 abs_src_url = "{}://{}{}".format(
