@@ -544,9 +544,10 @@ class TicketManager(object):
             path = "./../webrecorder/data/warcs{user}".format(
                 user=ticket.user.username
             )
-            if not os.access(path, os.F_OK):
-                path = "tmp/warcs/{ticket}.warc".format(ticket=ticket.id_)
-            shutil.copytree(path, storage)
+            if os.access(path, os.F_OK):
+                shutil.copytree(path, storage)
+            else:
+                shutil.copy(ticket.archive, storage)
             os.unlink(ticket.archive)
             logger.info("moved WARC %s to storage", ticket.archive)
             sqlite_client.delete("ticket", [(ticket.id_,)])
