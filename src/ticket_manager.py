@@ -180,12 +180,21 @@ class TicketManager(object):
         :param Response response: response
         """
         try:
-            soup = bs4.BeautifulSoup(response.content, features="html.parser")
-            header = soup.find("header")
-            for link in header.find_all("link"):
-                if link["rel"] == "stylesheet":
-                    if "href" in link.attrs:
-                        yield(self._get_url(response.request.url, link["href"]))
+            soup = bs4.BeautifulSoup(
+                response.content, features="html.parser"
+            )
+            head = soup.find("head")
+            if head:
+                for link in head.find_all("link"):
+                    """
+                    FIXME for some reason, bs4 does not respect the self-closing
+                    tag 'link', which leads to its 'rel' attribute becoming a
+                    list
+                    """
+                    if link["rel"][0] == "stylesheet":
+                        yield(
+                            self._get_url(response.request.url, link["href"])
+                        )
         except Exception as exception:
             msg = "failed to get CSS URLs: {}".format(exception)
             raise RuntimeError(msg)
