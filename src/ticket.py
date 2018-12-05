@@ -50,7 +50,7 @@ class Ticket(object):
         :param str archive: WARC archive filename
         :param dict metadata: WARC archive metadata
         :param str flag: status flag
-        :param datetime timestamp: timestamp
+        :param datetime.datetime timestamp: timestamp
         """
         try:
             self.id_ = id_
