@@ -476,29 +476,32 @@ class TicketManager(object):
             raise RuntimeError("failed to send email") from exception
         return
 
-    def submit(self, ticket):
+    def submit(self, data):
         """Submit new OpenDACHS ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
         """
         logger = logging.getLogger().getChild(self.submit.__name__)
         try:
+            ticket = self._initialize_ticket(data)
             self.archive(ticket)
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
             self.dump_ticket(ticket)
         except Exception as exception:
-            logger.exception("failed to submit OpenDACHS ticket %s", ticket.id_)
+            logger.exception(
+                "failed to submit OpenDACHS ticket %s", data["ticket"]
+            )
             raise RuntimeError(
                 "failed to submit OpenDACHS ticket"
             ) from exception
         return
 
-    def confirm(self, ticket):
+    def confirm(self, data):
         """Confirm ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
 
         :returns: OpenDACHS ticket
         :rtype: Ticket
@@ -507,22 +510,24 @@ class TicketManager(object):
         try:
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.update_row(
-                "flag", "ticket", (ticket.flag, ticket.id_)
+                "flag", "ticket", (data["flag"], data["ticket"])
             )
             ticket = src.ticket.Ticket.get_ticket(row)
         except Exception as exception:
             logger.exception(
-                "failed to confirm OpenDACHS ticket %s", ticket.id_
+                "failed to confirm OpenDACHS ticket %s", data["ticket"]
             )
             raise RuntimeError(
-                "failed to confirm OpenDACHS ticket {id}".format(id=ticket.id_)
+                "failed to confirm OpenDACHS ticket {id}".format(
+                    id=data["ticket"]
+                )
             ) from exception
         return ticket
 
-    def accept(self, ticket):
+    def accept(self, data):
         """Accept ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
 
         :returns: OpenDACHS ticket
         :rtype: Ticket
@@ -530,9 +535,9 @@ class TicketManager(object):
         logger = logging.getLogger().getChild(self.accept.__name__)
         try:
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
-            row = sqlite_client.select_row("ticket", (ticket.id_,))
+            row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
-            storage = "storage/{ticket}".format(ticket=ticket.id_)
+            storage = "storage/{ticket}".format(ticket=data["ticket"])
             shutil.copytree(
                 "./../webrecorder/data/warcs/{user}".format(
                     user=ticket.user.username
@@ -546,16 +551,20 @@ class TicketManager(object):
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
         except Exception as exception:
-            logger.exception("failed to accept OpenDACHS ticket %s", ticket.id_)
+            logger.exception(
+                "failed to accept OpenDACHS ticket %s", data["ticket"]
+            )
             raise RuntimeError(
-                "failed to accept OpenDACHS ticket {id}".format(id=ticket.id_)
+                "failed to accept OpenDACHS ticket {id}".format(
+                    id=data["ticket"]
+                )
             ) from exception
         return ticket
 
-    def deny(self, ticket):
+    def deny(self, data):
         """Deny ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
 
         :returns: OpenDACHS ticket
         :rtype: Ticket
@@ -563,16 +572,17 @@ class TicketManager(object):
         logger = logging.getLogger().getChild(self.deny.__name__)
         try:
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
-            row = sqlite_client.select_row("ticket", (ticket.id_,))
+            row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
             os.unlink(ticket.archive)
             sqlite_client.delete("ticket", [(ticket.id_,)])
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
         except Exception as exception:
-            logger.exception("failed to deny OpenDACHS ticket %s", ticket.id_)
+            logger.exception(
+                "failed to deny OpenDACHS ticket %s", data["ticket"])
             raise RuntimeError(
-                "failed to deny OpenDACHS ticket {id}".format(id=ticket.id_)
+                "failed to deny OpenDACHS ticket {id}".format(id=data["ticket"])
             ) from exception
         return ticket
 
@@ -638,33 +648,34 @@ class TicketManager(object):
             try:
                 fp = open(filename)
                 data = json.load(fp)
-                ticket = self._initialize_ticket(data)
-                if ticket.flag == "pending":
-                    self.submit(ticket)
+                if data["flag"] == "pending":
+                    ticket = self.submit(data)
                     self.call_api()
                     submitted += 1
                     self.sendmail(ticket, "submitted")
-                elif ticket.flag == "confirmed":
-                    ticket = self.confirm(ticket)
+                elif data["flag"] == "confirmed":
+                    ticket = self.confirm(data)
                     confirmed += 1
                     self.sendmail(ticket, "confirmed")
-                elif ticket.flag == "accepted":
-                    ticket = self.accept(ticket)
+                elif data["flag"] == "accepted":
+                    ticket = self.accept(data)
                     self.call_api()
                     accepted += 1
                     self.sendmail(ticket, "accepted")
-                elif ticket.flag == "denied":
-                    ticket = self.deny(ticket)
+                elif data["flag"] == "denied":
+                    ticket = self.deny(data)
                     self.call_api()
                     denied += 1
                     self.sendmail(ticket, "denied")
                 else:
-                    msg = "unknown flag {flag}".format(flag=ticket.flag)
+                    msg = "unknown flag {flag}".format(flag=data["flag"])
                     raise Exception(msg)
             except Exception as exception:
                 logger.warning("failed to manage ticket")
-                if "ticket" not in locals():
+                if "ticket" not in locals() and "data" not in locals():
                     ticket = src.ticket.Ticket("unknown", *(5*(None, )))
+                elif "data" in locals():
+                    ticket = src.ticket.Ticket(data["ticket"], *(5*(None, )))
                 self.sendmail(ticket, "error")
                 raise RuntimeError(
                     "failed to manage ticket"
