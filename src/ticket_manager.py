@@ -487,6 +487,7 @@ class TicketManager(object):
         logger = logging.getLogger().getChild(self.submit.__name__)
         try:
             ticket = self._initialize_ticket(data)
+            ticket.flag = "submitted"
             self.archive(ticket)
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
