@@ -696,6 +696,6 @@ class TicketManager(object):
                 raise RuntimeError(
                     "failed to remove expired ticket {id}".format(id=ticket.id_)
                 )
-        for key, value in counter:
+        for key, value in counter.items():
             logger.info("%s %d tickets", key, value)
         return
