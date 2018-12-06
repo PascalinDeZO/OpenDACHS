@@ -475,6 +475,14 @@ class TicketManager(object):
             raise RuntimeError("failed to send email") from exception
         return
 
+    def upload(self, src, dest):
+        """Upload existing WARC archive.
+
+        :param str src: source WARC archive file path
+        :param str dest: destination WARC archive file path
+        """
+        raise NotImplementedError
+
     def submit(self, data):
         """Submit new OpenDACHS ticket.
 
@@ -486,7 +494,10 @@ class TicketManager(object):
         logger = logging.getLogger().getChild(self.submit.__name__)
         try:
             ticket = self._initialize_ticket(data)
-            self.archive(ticket)
+            if "warc" not in data:
+                self.archive(ticket)
+            else:
+                self.upload(data["warc"], ticket.archive)
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
