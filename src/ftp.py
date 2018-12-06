@@ -41,8 +41,9 @@ def get_ftp_client(ftp):
         ftp_client = ftplib.FTP_TLS(**ftp["FTP"])
         ftp_client.prot_p()
     except Exception as exception:
-        msg = "failed to get FTP client:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to get FTP client"
+        ) from exception
     return ftp_client
 
 
@@ -61,8 +62,9 @@ def retrieve_file(ftp_client, filename):
         fp.close()
         ftp_client.delete(filename)
     except Exception as exception:
-        msg = "failed to retrieve file {}:{}".format(filename, exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to retrieve file {filename}".format(filename=filename)
+        ) from exception
     return fp.name
 
 
@@ -82,10 +84,9 @@ def retrieve_files(ftp):
             try:
                 filenames.append(retrieve_file(ftp_client, filename))
             except Exception as exception:
-                logger.warning(
-                    "failed to retrieve file %s:%s", filename, exception
-                )
+                logger.warning("failed to retrieve file %s", filename)
     except Exception as exception:
-        msg = "failed to retrieve files:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to retrieve files"
+        ) from exception
     return filenames
