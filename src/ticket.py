@@ -60,8 +60,9 @@ class Ticket(object):
             self._flag = flag
             self._timestamp = timestamp
         except Exception as exception:
-            msg = "failed to initialize OpenDACHS ticket:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to initialize OpenDACHS ticket"
+            ) from exception
         return
 
     @property
@@ -98,8 +99,9 @@ class Ticket(object):
                 self.timestamp
             )
         except Exception as exception:
-            msg = "failed to get SQLite row:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to get SQLite row"
+            ) from exception
         return row
 
     @classmethod
@@ -120,8 +122,9 @@ class Ticket(object):
             timestamp = row[5]
             ticket = cls(id_, user, archive, metadata, flag, timestamp)
         except Exception as exception:
-            msg = "failed to get OpenDACHS ticket:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to get OpenDACHS ticket"
+            ) from exception
         return ticket
 
     def get_json(self):
@@ -141,6 +144,7 @@ class Ticket(object):
             }
             json_string = json.dumps(json_string)
         except Exception as exception:
-            msg = "failed to get JSON formatted string:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to get JSON formatted string"
+            ) from exception
         return json_string
