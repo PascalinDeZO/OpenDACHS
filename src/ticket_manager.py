@@ -68,7 +68,7 @@ class TicketManager(object):
             self.sqlite = sqlite
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.create_table()
-        except sqlite3.Error as exception:
+        except Exception as exception:
             raise RuntimeError(
                 "failed to initialize ticket manager"
             ) from exception
