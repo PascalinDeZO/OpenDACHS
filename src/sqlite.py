@@ -41,10 +41,9 @@ class SQLiteClient(object):
         try:
             self.sqlite = sqlite
         except Exception as exception:
-            msg = "failed to initialize OpenDACHS database client:{}".format(
-                exception
-            )
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to initialize OpenDACHS database client"
+            ) from exception
         return
 
     def connect(self):
@@ -60,10 +59,9 @@ class SQLiteClient(object):
             )
             connection.row_factory = sqlite3.Row
         except Exception as exception:
-            msg = "failed to connect to OpenDACHS database:{}".format(
-                exception
-            )
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to connect to OpenDACHS database"
+            ) from exception
         return connection
 
     def create_table(self):
@@ -83,8 +81,9 @@ class SQLiteClient(object):
             connection.commit()
             connection.close()
         except Exception as exception:
-            msg = "failed to create table:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to create table"
+            ) from exception
         return
 
     def insert(self, rows):
@@ -104,8 +103,9 @@ class SQLiteClient(object):
             connection.commit()
             connection.close()
         except Exception as exception:
-            msg = "failed to insert rows:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to insert rows"
+            ) from exception
         return
 
     def select_rows(self, column="", parameters=(), operator="="):
@@ -138,8 +138,9 @@ class SQLiteClient(object):
                 cursor = connection.execute(sql)
             rows = [tuple(row) for row in cursor]
         except Exception as exception:
-            msg = "failed to select rows:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to select rows"
+            ) from exception
         return rows
 
     def select_row(self, column, parameters, operator="="):
@@ -164,8 +165,9 @@ class SQLiteClient(object):
             else:
                 row = rows[0]
         except Exception as exception:
-            msg = "failed to select row:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to select row"
+            ) from exception
         return row
 
     def update_rows(self, column0, parameters, column1=""):
@@ -197,8 +199,9 @@ class SQLiteClient(object):
             connection.commit()
             connection.close()
         except Exception as exception:
-            msg = "failed to update rows:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to update rows"
+            ) from exception
         try:
             if column1:
                 parameters = [(row[1],) for row in parameters]
@@ -207,8 +210,9 @@ class SQLiteClient(object):
                 for row in parameters
             ]
         except Exception as exception:
-            msg = "failed to select updated rows:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to select updated rows"
+            ) from exception
         return rows
 
     def update_row(self, column0, column1, parameters):
@@ -226,19 +230,16 @@ class SQLiteClient(object):
                 column0, [parameters], column1=column1
             ).pop(0)
             if len(rows) > 1:
-                msg = "failed to select updated row:{}".format(
-                    "query result is not unique"
-                )
+                msg = "query result is not unique"
                 raise RuntimeError(msg)
             elif len(rows) == 0:
                 row = None
             else:
                 row = rows[0]
         except Exception as exception:
-            msg = "failed to update and/or select updated row:{}".format(
-                exception
-            )
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to update and/or select updated row"
+            ) from exception
         return row
 
     def delete(self, column, parameters):
@@ -257,6 +258,7 @@ class SQLiteClient(object):
             connection.commit()
             connection.close()
         except Exception as exception:
-            msg = "failed to delete rows:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to delete rows"
+            ) from exception
         return
