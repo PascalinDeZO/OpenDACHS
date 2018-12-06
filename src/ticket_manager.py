@@ -547,7 +547,10 @@ class TicketManager(object):
             if os.access(path, os.F_OK):
                 shutil.copytree(path, storage)
             else:
-                shutil.copy(ticket.archive, storage)
+                shutil.copy(
+                    ticket.archive,
+                    "{}/{}".format(storage, ticket.archive)
+                )
             os.unlink(ticket.archive)
             logger.info("moved WARC %s to storage", ticket.archive)
             sqlite_client.delete("ticket", [(ticket.id_,)])
