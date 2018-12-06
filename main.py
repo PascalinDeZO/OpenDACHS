@@ -72,7 +72,7 @@ def main():
     try:
         logging.basicConfig(
             filename="storage/opendachs.log",
-            format="%(asctime)s %(message)s",
+            format="%(asctime)s %(levelname)s %(message)s",
             level=logging.INFO
         )
         parser = get_argument_parser()
