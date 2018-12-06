@@ -34,21 +34,25 @@ class TestEmail(unittest.TestCase):
     def test_load_templates(self):
         """Load email templates.
 
-        Expecting: templates 'accepted', 'confirmed', 'denied', 'expired' and
-        'submitted'
+        Expecting: templates 'accepted', 'confirmed', 'denied', 'error',
+        'expired' and 'submitted'
         """
-        templates = ["accepted", "confirmed", "denied", "expired", "submitted"]
+        templates = [
+            "accepted", "confirmed", "denied", "error", "expired", "submitted"
+        ]
         loader = src.email._load_templates(path="./../templates_sample")
         self.assertEqual(templates, loader.list_templates())
 
     def test_load_existing_template(self):
         """Load email template.
 
-        Trying: template is one of 'accepted', 'confirmed', 'denied',
+        Trying: template is one of 'accepted', 'confirmed', 'denied', 'error'
         'expired' and 'submitted'
         Expecting: template is loaded
         """
-        templates = ["accepted", "confirmed", "denied", "expired", "submitted"]
+        templates = [
+            "accepted", "confirmed", "denied", "error", "expired", "submitted"
+        ]
         for template in templates:
             loaded_template = src.email.load_template(
                 template, path="./../templates_sample"

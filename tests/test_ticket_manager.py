@@ -220,6 +220,7 @@ class TestTicketManager(unittest.TestCase):
         content = "".join(
             ["<source src='baz'>", "<source srcset='baz'>"]
         )
+        content = "<html>{content}</html>".format(content=content)
         abs_src = url+"/baz"
         request = requests.Request(url=url)
         response = requests.Response()
@@ -228,6 +229,55 @@ class TestTicketManager(unittest.TestCase):
         self.assertEqual(
             [abs_src, abs_src],
             list(self.ticket_manager._get_media_urls(response))
+        )
+
+    def test_get_css_urls_stylesheet(self):
+        """Get CSS URLs.
+
+        Trying: url = http://foo.com/bar, rel = stylesheet and href one of
+        https://baz.css, http://baz.css, /baz.css, baz.css
+        Expecting: corresponding absolute src URLs
+        """
+        url = "http://foo.com/bar"
+        href = ["https://baz.css", "http://baz.css", "/baz.css", "baz.css"]
+        abs_src = [
+            href[0],
+            href[1],
+            "http://foo.com"+href[2],
+            "http://foo.com/bar/"+href[3]
+        ]
+        link = "".join(
+            "<link rel='stylesheet' href='{href}'>".format(href=value)
+            for value in href
+        )
+        content = "<html><head>{link}</head></html>".format(link=link)
+        request = requests.Request(url=url)
+        response = requests.Response()
+        response._content = content
+        response.request = request
+        self.assertEqual(
+            abs_src,
+            list(self.ticket_manager._get_css_urls(response))
+        )
+
+    def test_get_css_urls_any_relationship(self):
+        """Get CSS URLs.
+
+        Trying: url = http://foo.com/bar, rel any value except 'stylesheet'
+        and href = https://baz.com
+        Excepting: empty list of absolute src URLs
+        """
+        url = "http://foo.com/bar"
+        content = (
+            "<html><head><link rel='foo' href='https://baz.com'>"
+            "</head></html>"
+        )
+        request = requests.Request(url=url)
+        response = requests.Response()
+        response._content = content
+        response.request = request
+        self.assertEqual(
+            0, len(list(self.ticket_manager._get_css_urls(response)))
         )
 
     def test_initialize_user(self):
