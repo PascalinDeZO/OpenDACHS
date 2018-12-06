@@ -70,7 +70,11 @@ def read_config(filename):
 def main():
     """Main routine."""
     try:
-        logging.basicConfig(filename="opendachs.log", level=logging.INFO)
+        logging.basicConfig(
+            filename="storage/opendachs.log",
+            format="%(asctime)s %(message)s",
+            level=logging.INFO
+        )
         parser = get_argument_parser()
         args = parser.parse_args()
         ftp = read_config(args.ftp)

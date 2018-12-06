@@ -33,6 +33,7 @@ import datetime
 import collections
 import urllib.parse
 import subprocess
+import sqlite3
 
 # third party imports
 import bs4
@@ -59,7 +60,7 @@ class TicketManager(object):
 
         :param ConfigParser ftp: FTP configuration
         :param ConfigParser smtp: SMTP configuration
-        :param ConfigParser sqlite SQLite configuration
+        :param ConfigParser sqlite: SQLite configuration
         """
         try:
             self.ftp = ftp
@@ -67,9 +68,10 @@ class TicketManager(object):
             self.sqlite = sqlite
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.create_table()
-        except Exception as exception:
-            msg = "failed to initialize ticket manager:{}".format(exception)
-            raise RuntimeError(msg)
+        except sqlite3.Error as exception:
+            raise RuntimeError(
+                "failed to initialize ticket manager"
+            ) from exception
         return
 
     @staticmethod
@@ -89,8 +91,9 @@ class TicketManager(object):
                 random.choice(alphabet) for _ in range(length)
             )
         except Exception as exception:
-            msg = "failed to generate username:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to generate username"
+            ) from exception
         return username
 
     @staticmethod
@@ -114,8 +117,9 @@ class TicketManager(object):
                 for char in base64.b64encode(os.urandom(length)).decode()
             )
         except Exception as exception:
-            msg = "failed to generate password:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to generate password"
+            ) from exception
         return password
 
     @staticmethod
@@ -131,6 +135,11 @@ class TicketManager(object):
         try:
             if base_src_url.startswith(("https", "http")):
                 abs_src_url = base_src_url
+            elif base_src_url.startswith("//"):
+                parse_result = urllib.parse.urlparse(url)
+                abs_src_url = "{}:{}".format(
+                    parse_result.scheme, base_src_url
+                )
             elif base_src_url.startswith("/"):
                 parse_result = urllib.parse.urlparse(url)
                 abs_src_url = "{}://{}{}".format(
@@ -141,8 +150,9 @@ class TicketManager(object):
             else:
                 abs_src_url = "{}/{}".format(url, base_src_url)
         except Exception as exception:
-            msg = "failed to get absolute src URL {}:{}".format(base_src_url, exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to get absolute src URL"
+            ) from exception
         return abs_src_url
 
     def _get_image_urls(self, response):
@@ -155,8 +165,9 @@ class TicketManager(object):
             for img in soup.find_all("img"):
                 yield(self._get_url(response.request.url, img["src"]))
         except Exception as exception:
-            msg = "failed to get image URLs: {}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to get image URLs"
+            ) from exception
 
     def _get_media_urls(self, response):
         """Get media URLs.
@@ -171,8 +182,35 @@ class TicketManager(object):
                 elif "srcset" in source.attrs:
                     yield(self._get_url(response.request.url, source["srcset"]))
         except Exception as exception:
-            msg = "failed to get media URLs: {}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to get media URLs"
+            ) from exception
+
+    def _get_css_urls(self, response):
+        """Get CSS URLs.
+
+        :param Response response: response
+        """
+        try:
+            soup = bs4.BeautifulSoup(
+                response.content, features="html.parser"
+            )
+            head = soup.find("head")
+            if head:
+                for link in head.find_all("link"):
+                    """
+                    FIXME for some reason, bs4 does not respect the self-closing
+                    tag 'link', which leads to its 'rel' attribute becoming a
+                    list
+                    """
+                    if link["rel"][0] == "stylesheet":
+                        yield(
+                            self._get_url(response.request.url, link["href"])
+                        )
+        except Exception as exception:
+            raise RuntimeError(
+                "failed to get CSS URLs"
+            ) from exception
 
     def archive(self, ticket):
         """Archive URL.
@@ -191,13 +229,13 @@ class TicketManager(object):
                 media_urls = self._get_media_urls(response)
                 for media_url in media_urls:
                     scraper.get(media_url)
-        except RuntimeError:
-            raise
+                css_urls = self._get_css_urls(response)
+                for css_url in css_urls:
+                    scraper.get(css_url)
         except Exception as exception:
-            msg = "failed to archive {}:{}".format(
-                ticket.metadata["url"], exception
-            )
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to archive {url}".format(url=ticket.metadata["url"])
+            ) from exception
         return
 
     @staticmethod
@@ -211,10 +249,9 @@ class TicketManager(object):
             fp = open(json_file, mode="w")
             fp.write(ticket.get_json())
         except Exception as exception:
-            msg = "failed to dump OpenDACHS ticket {}:{}".format(
-                ticket.id_, exception
-            )
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to dump OpenDACHS ticket {id}".format(id=ticket.id_)
+            ) from exception
         return
 
     def _prettyprint(self, value, level=0):
@@ -247,8 +284,9 @@ class TicketManager(object):
                         level=level*"-", v=value
                     )
         except Exception as exception:
-            msg = "failed to return prettyprint:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to return prettyprint"
+            ) from exception
         return prettyprint
 
     def compose_plaintext_attachment(self, ticket):
@@ -264,10 +302,9 @@ class TicketManager(object):
             text = self._prettyprint(ticket.metadata)
             attachment = src.email.compose_attachment(filename, text)
         except Exception as exception:
-            msg = "failed to compose plaintext email attachment:{}".format(
-                exception
-            )
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to compose plaintext email attachment"
+            ) from exception
         return attachment
 
     @staticmethod
@@ -336,8 +373,9 @@ class TicketManager(object):
                     )
             attachment = src.email.compose_attachment(filename, text)
         except Exception as exception:
-            msg = "failed to compose RIS attachment:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to compose RIS attachment"
+            ) from exception
         return attachment
 
     def _initialize_user(self, data):
@@ -355,8 +393,9 @@ class TicketManager(object):
             email_addr = data["email"]
             user = src.ticket.User(username, role, password, email_addr)
         except Exception as exception:
-            msg = "failed to initialize user:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to initialize Webrecorder user"
+            ) from exception
         return user
 
     def _initialize_ticket(self, data):
@@ -381,8 +420,9 @@ class TicketManager(object):
                 id_, user, archive, metadata, flag, timestamp
             )
         except Exception as exception:
-            msg = "failed to initialize OpenDACHS ticket:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to initialize OpenDACHS ticket"
+            ) from exception
         return ticket
 
     def sendmail(self, ticket, name):
@@ -411,6 +451,10 @@ class TicketManager(object):
                 )
             elif name == "error":
                 body = src.email.compose_body(name, ticket=ticket.id_)
+            else:
+                raise ValueError(
+                    "unknown email template {name}".format(name=name)
+                )
             if name in ["submitted", "accepted", "denied", "expired"]:
                 email_msg = src.email.compose_msg(
                     self.smtp, ticket.user.email_addr, subject, body,
@@ -429,71 +473,81 @@ class TicketManager(object):
                     self.smtp, self.smtp["header_fields"]["reply_to"], email_msg
                 )
         except Exception as exception:
-            msg = "failed to send email:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError("failed to send email") from exception
         return
 
-    def submit(self, ticket):
+    def submit(self, data):
         """Submit new OpenDACHS ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
+
+        :returns: OpenDACHS ticket
+        :rtype: Ticket
         """
+        logger = logging.getLogger().getChild(self.submit.__name__)
         try:
-            logger = logging.getLogger().getChild(self.submit.__name__)
+            ticket = self._initialize_ticket(data)
             self.archive(ticket)
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
             self.dump_ticket(ticket)
         except Exception as exception:
-            logger.exception("failed to submit OpenDACHS ticket %s", ticket.id_)
-            msg = "failed to submit OpenDACHS ticket:{}".format(exception)
-            raise RuntimeError(msg)
-        return
+            logger.exception(
+                "failed to submit OpenDACHS ticket %s", data["ticket"]
+            )
+            raise RuntimeError(
+                "failed to submit OpenDACHS ticket"
+            ) from exception
+        return ticket
 
-    def confirm(self, ticket):
+    def confirm(self, data):
         """Confirm ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
 
         :returns: OpenDACHS ticket
         :rtype: Ticket
         """
+        logger = logging.getLogger().getChild(self.confirm.__name__)
         try:
-            logger = logging.getLogger().getChild(self.confirm.__name__)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.update_row(
-                "flag", "ticket", (ticket.flag, ticket.id_)
+                "flag", "ticket", (data["flag"], data["ticket"])
             )
             ticket = src.ticket.Ticket.get_ticket(row)
         except Exception as exception:
             logger.exception(
-                "failed to confirm OpenDACHS ticket %s", ticket.id_
+                "failed to confirm OpenDACHS ticket %s", data["ticket"]
             )
-            msg = "failed to confirm ticket:{}".format(exception)
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to confirm OpenDACHS ticket {id}".format(
+                    id=data["ticket"]
+                )
+            ) from exception
         return ticket
 
-    def accept(self, ticket):
+    def accept(self, data):
         """Accept ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
 
         :returns: OpenDACHS ticket
         :rtype: Ticket
         """
+        logger = logging.getLogger().getChild(self.accept.__name__)
         try:
-            logger = logging.getLogger().getChild(self.accept.__name__)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
-            row = sqlite_client.select_row("ticket", (ticket.id_,))
+            row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
-            storage = "storage/{ticket}".format(ticket=ticket.id_)
-            shutil.copytree(
-                "./../webrecorder/data/warcs/{user}".format(
-                    user=ticket.user.username
-                ),
-                storage
+            storage = "storage/{ticket}".format(ticket=data["ticket"])
+            path = "./../webrecorder/data/warcs{user}".format(
+                user=ticket.user.username
             )
+            if os.access(path, os.F_OK):
+                shutil.copytree(path, storage)
+            else:
+                shutil.copy(ticket.archive, storage)
             os.unlink(ticket.archive)
             logger.info("moved WARC %s to storage", ticket.archive)
             sqlite_client.delete("ticket", [(ticket.id_,)])
@@ -501,38 +555,45 @@ class TicketManager(object):
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
         except Exception as exception:
-            logger.exception("failed to accept OpenDACHS ticket %s", ticket.id_)
-            msg = "failed to accept ticket:{}".format(exception)
-            raise RuntimeError(msg)
+            logger.exception(
+                "failed to accept OpenDACHS ticket %s", data["ticket"]
+            )
+            raise RuntimeError(
+                "failed to accept OpenDACHS ticket {id}".format(
+                    id=data["ticket"]
+                )
+            ) from exception
         return ticket
 
-    def deny(self, ticket):
+    def deny(self, data):
         """Deny ticket.
 
-        :param Ticket ticket: OpenDACHS ticket
+        :param dict data: OpenDACHS ticket
 
         :returns: OpenDACHS ticket
         :rtype: Ticket
         """
+        logger = logging.getLogger().getChild(self.deny.__name__)
         try:
-            logger = logging.getLogger().getChild(self.deny.__name__)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
-            row = sqlite_client.select_row("ticket", (ticket.id_,))
+            row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
             os.unlink(ticket.archive)
             sqlite_client.delete("ticket", [(ticket.id_,)])
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
         except Exception as exception:
-            logger.exception("failed to deny OpenDACHS ticket %s", ticket.id_)
-            msg = "failed to deny ticket:{}".format(exception)
-            raise RuntimeError(msg)
+            logger.exception(
+                "failed to deny OpenDACHS ticket %s", data["ticket"])
+            raise RuntimeError(
+                "failed to deny OpenDACHS ticket {id}".format(id=data["ticket"])
+            ) from exception
         return ticket
 
     def remove_expired(self):
         """Remove expired OpenDACHS tickets."""
+        logger = logging.getLogger().getChild(self.remove_expired.__name__)
         try:
-            logger = logging.getLogger().getChild(self.remove_expired.__name__)
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             parameters = (
                 datetime.datetime.now() - datetime.timedelta(days=3),
@@ -555,13 +616,13 @@ class TicketManager(object):
                     self.dump_ticket(ticket)
                     yield(ticket)
         except Exception as exception:
-            msg = "failed to remove expired OpenDACHS tickets:{}".format(
-                exception
-            )
-            raise RuntimeError(msg)
+            raise RuntimeError(
+                "failed to remove expired OpenDACHS tickets"
+            ) from exception
 
     def call_api(self):
         """Call Webrecorder API."""
+        # FIXME stdout is not logged
         args = [
             "docker", "exec", "-it", "webrecorder_app_1",
             "python3", "-m", "webrecorder.opendachs"
@@ -575,7 +636,7 @@ class TicketManager(object):
                 break
         if child.returncode != 0:
             raise RuntimeError(
-                "failed to call Webrecorder API: exit status {}".format(
+                "failed to call Webrecorder API (exit status {})".format(
                     child.returncode
                 )
             )
@@ -591,37 +652,38 @@ class TicketManager(object):
             try:
                 fp = open(filename)
                 data = json.load(fp)
-                ticket = self._initialize_ticket(data)
-                if ticket.flag == "pending":
-                    self.submit(ticket)
+                if data["flag"] == "pending":
+                    ticket = self.submit(data)
                     self.call_api()
                     submitted += 1
                     self.sendmail(ticket, "submitted")
-                elif ticket.flag == "confirmed":
-                    ticket = self.confirm(ticket)
-                    confirmed +=1
+                elif data["flag"] == "confirmed":
+                    ticket = self.confirm(data)
+                    confirmed += 1
                     self.sendmail(ticket, "confirmed")
-                elif ticket.flag == "accepted":
-                    ticket = self.accept(ticket)
+                elif data["flag"] == "accepted":
+                    ticket = self.accept(data)
                     self.call_api()
                     accepted += 1
                     self.sendmail(ticket, "accepted")
-                elif ticket.flag == "denied":
-                    ticket = self.deny(ticket)
+                elif data["flag"] == "denied":
+                    ticket = self.deny(data)
                     self.call_api()
                     denied += 1
                     self.sendmail(ticket, "denied")
                 else:
-                    msg = "unknown flag {flag}".format(flag=ticket.flag)
+                    msg = "unknown flag {flag}".format(flag=data["flag"])
                     raise Exception(msg)
             except Exception as exception:
-                msg = "failed to manage ticket:{exception}".format(
-                    exception=exception
-                )
-                logger.warning(msg)
-                if "ticket" not in locals():
+                logger.warning("failed to manage ticket")
+                if "ticket" not in locals() and "data" not in locals():
                     ticket = src.ticket.Ticket("unknown", *(5*(None, )))
+                elif "data" in locals():
+                    ticket = src.ticket.Ticket(data["ticket"], *(5*(None, )))
                 self.sendmail(ticket, "error")
+                raise RuntimeError(
+                    "failed to manage ticket"
+                ) from exception
             finally:
                 if "fp" in locals():
                     fp.close()
@@ -631,11 +693,13 @@ class TicketManager(object):
                 removed += 1
                 self.sendmail(ticket, "expired")
             except Exception as exception:
-                msg = "failed to removed expired ticket {}:{}".format(
-                    ticket.id_, exception
+                logger.warning(
+                    "failed to remove expired ticket {id}".format(id=ticket.id_)
                 )
-                logger.warning(msg)
                 self.sendmail(ticket, "error")
+                raise RuntimeError(
+                    "failed to remove expired ticket {id}".format(id=ticket.id_)
+                )
         logger.info("submitted %d new tickets", submitted)
         logger.info("confirmed %d tickets", confirmed)
         logger.info("accepted %d tickets", accepted)
