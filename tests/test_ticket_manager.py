@@ -32,7 +32,7 @@ import src.ticket_manager
 
 
 class TestTicketManager(unittest.TestCase):
-    """OpenDACHS ticket manager test cases.
+    """OpenDACHS ticket manager test cases base class.
 
     :ivar TicketManager ticket_manager: OpenDACHS ticket manager
     """
@@ -40,15 +40,25 @@ class TestTicketManager(unittest.TestCase):
     def setUp(self):
         """Set test cases up."""
         ftp = configparser.ConfigParser()
-        ftp.read_dict({})
+        ftp.read_dict(
+            {
+                "FTP": {"host": "", "user": "", "passwd": ""},
+                "cmd": {"RETR": ""}
+            }
+        )
         smtp = configparser.ConfigParser()
-        smtp.read_dict({})
+        smtp.read_dict(
+            {
+                "SMTP": {"host": "", "port": ""},
+                "header_fields": {"from": "", "reply_to": ""}
+            }
+        )
         sqlite = configparser.ConfigParser()
         sqlite.read_dict(
             {
                 "SQLite": {
                     "database": ":memory:",
-                    "table": "tickets",
+                    "table": "tickets"
                 },
                 "column_defs": {
                     "ticket": "TEXT PRIMARY KEY",
@@ -63,6 +73,10 @@ class TestTicketManager(unittest.TestCase):
         self.ticket_manager = src.ticket_manager.TicketManager(
             ftp, smtp, sqlite
         )
+
+
+class TestGenerateUser(TestTicketManager):
+    """Webrecorder user generation test cases."""
 
     def test_generate_username_default(self):
         """Generate Webrecorder username.
@@ -130,6 +144,23 @@ class TestTicketManager(unittest.TestCase):
                 length=length
             )
 
+    def test_initialize_user(self):
+        """Initialize Webrecorder user.
+
+        Trying: email_addr = foo@bar.com
+        Expecting: [A-Za-z0-9]{8} matches username, role = archivist,
+        [A-Za-z0-9]{16} matches password and email_addr = foo@bar.com
+        """
+        email_addr = "foo@bar.com"
+        user = self.ticket_manager._initialize_user({"email": email_addr})
+        self.assertRegex(user.username, r"[A-Za-z0-9]{8}")
+        self.assertEqual("archivist", user.role)
+        self.assertRegex(user.password, r"[A-Za-z0-9]{16}")
+        self.assertEqual(email_addr, user.email_addr)
+
+class TestGetURL(TestTicketManager):
+    """Absolute URL assembly test cases."""
+
     def test_get_url_https(self):
         """Get absolute src URL.
 
@@ -155,6 +186,32 @@ class TestTicketManager(unittest.TestCase):
             url, base_src_url
         )
         self.assertEqual(base_src_url, abs_src_url)
+
+    def test_get_url_double_backslash_http(self):
+        """Get absolute src URL.
+
+        Trying: url = http://foo.com/bar, base_src_url = //baz.com
+        Expecting: absolute src URL = http://baz.com
+        """
+        url = "http://foo.com/bar"
+        base_src_url = "//baz.com"
+        abs_src_url = src.ticket_manager.TicketManager._get_url(
+            url, base_src_url
+        )
+        self.assertEqual("http://baz.com", abs_src_url)
+
+    def test_get_url_double_backslash_https(self):
+        """Get absolute src URL.
+
+        Trying: url = https://foo.com/bar, base_src_url = //baz.com
+        Expecting: absolute src URL = https://baz.com
+        """
+        url = "https://foo.com/bar"
+        base_src_url = "//baz.com"
+        abs_src_url = src.ticket_manager.TicketManager._get_url(
+            url, base_src_url
+        )
+        self.assertEqual("https://baz.com", abs_src_url)
 
     def test_get_url_backslash(self):
         """Get absolute src URL.
@@ -182,19 +239,23 @@ class TestTicketManager(unittest.TestCase):
         )
         self.assertEqual(url+"/"+base_src_url, abs_src_url)
 
+class TestGetURLS(TestTicketManager):
+    """Absolute URLs (img, media, css) assembly test cases."""
+
     def test_get_img_urls(self):
         """Archive images.
 
         Trying: url = http://foo.com/bar and src one of
-        https://baz.com, http://baz.com, /baz and baz
+        https://baz.com, http://baz.com, //baz.com, /baz and baz
         Expecting: corresponding absolute src URLs
         """
-        src = ["https://baz.com", "http://baz.com", "/baz", "baz"]
+        src = ["https://baz.com", "http://baz.com", "//baz.com", "/baz", "baz"]
         abs_src = [
             src[0],
             src[1],
-            "http://foo.com"+src[2],
-            "http://foo.com/bar/"+src[3]
+            "http:"+src[2],
+            "http://foo.com"+src[3],
+            "http://foo.com/bar/"+src[4]
         ]
         img = "".join(
             "<img src='{src}' alt='alt'>".format(src=value)
@@ -239,12 +300,19 @@ class TestTicketManager(unittest.TestCase):
         Expecting: corresponding absolute src URLs
         """
         url = "http://foo.com/bar"
-        href = ["https://baz.css", "http://baz.css", "/baz.css", "baz.css"]
+        href = [
+            "https://baz.css",
+            "http://baz.css",
+            "//baz.css",
+            "/baz.css",
+            "baz.css"
+        ]
         abs_src = [
             href[0],
             href[1],
-            "http://foo.com"+href[2],
-            "http://foo.com/bar/"+href[3]
+            "http:"+href[2],
+            "http://foo.com"+href[3],
+            "http://foo.com/bar/"+href[4]
         ]
         link = "".join(
             "<link rel='stylesheet' href='{href}'>".format(href=value)
@@ -280,19 +348,8 @@ class TestTicketManager(unittest.TestCase):
             0, len(list(self.ticket_manager._get_css_urls(response)))
         )
 
-    def test_initialize_user(self):
-        """Initialize Webrecorder user.
-
-        Trying: email_addr = foo@bar.com
-        Expecting: [A-Za-z0-9]{8} matches username, role = archivist,
-        [A-Za-z0-9]{16} matches password and email_addr = foo@bar.com
-        """
-        email_addr = "foo@bar.com"
-        user = self.ticket_manager._initialize_user({"email": email_addr})
-        self.assertRegex(user.username, r"[A-Za-z0-9]{8}")
-        self.assertEqual("archivist", user.role)
-        self.assertRegex(user.password, r"[A-Za-z0-9]{16}")
-        self.assertEqual(email_addr, user.email_addr)
+class TestGenerateTicket(TestTicketManager):
+    """OpenDACHS ticket generation test cases."""
 
     def test_initialize_ticket(self):
         """Initialize OpenDACHS ticket.
