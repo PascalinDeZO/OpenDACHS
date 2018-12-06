@@ -42,8 +42,9 @@ def _load_templates(path="templates"):
     try:
         loader = jinja2.FileSystemLoader(path)
     except Exception as exception:
-        msg = "failed to load email templates:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to load email templates"
+        ) from exception
     return loader
 
 
@@ -59,8 +60,9 @@ def load_template(name, path="templates"):
         loader = _load_templates(path=path)
         template = loader.load(jinja2.Environment(), name)
     except Exception as exception:
-        msg = "failed to load email template:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to load email template {name}".format(name=name)
+        ) from exception
     return template
 
 
@@ -79,8 +81,9 @@ def compose_body(name, *args, **kwargs):
         body = template.render(*args, **kwargs)
         body = email.mime.text.MIMEText(body)
     except Exception as exception:
-        msg = "failed to compose email body:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to compose email body"
+        ) from exception
     return body
 
 
@@ -99,8 +102,9 @@ def compose_attachment(filename, text):
             "Content-Disposition", "attachment", filename=filename
         )
     except Exception as exception:
-        msg = "failed to compose email attachment:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to compose email attachment"
+        ) from exception
     return attachment
 
 
@@ -120,8 +124,9 @@ def _add_header_fields(smtp, to_addrs, subject, msg):
         msg["To"] = to_addrs
         msg["Subject"] = subject
     except Exception as exception:
-        msg = "failed to add header fields:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to add header fields"
+        ) from exception
     return
 
 
@@ -145,8 +150,9 @@ def compose_msg(smtp, to_addrs, subject, body, attachment=None):
         if attachment:
             msg.attach(attachment)
     except Exception as exception:
-        msg = "failed to compose email message:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to compose email message"
+        ) from exception
     return msg
 
 
@@ -167,6 +173,7 @@ def sendmail(smtp, to_addrs, msg):
         )
         logger.info("sent email to %s", to_addrs)
     except Exception as exception:
-        msg = "failed to send email:{}".format(exception)
-        raise RuntimeError(msg)
+        raise RuntimeError(
+            "failed to send email"
+        ) from exception
     return
