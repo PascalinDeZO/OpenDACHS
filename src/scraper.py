@@ -83,7 +83,7 @@ class Scraper(object):
             if base:
                 base = base["href"]
             else:
-                path = urllib.parse.urlparse(self.ticket.metadata["url"])
+                path = urllib.parse.urlparse(self.ticket.metadata["url"]).path
                 dirname = os.path.dirname(path)
                 base = "".join(
                     self.ticket.metadata["url"].partition(dirname)
