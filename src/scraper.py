@@ -1,5 +1,5 @@
 #    OpenDACHS 1.0
-#    Copyright (C) 2018  Carine Dengler
+#    Copyright (C) 2018  Carine Dengler, Heidelberg University
 #
 #    This program is free software: you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -39,16 +39,18 @@ class Scraper(object):
     :ivar BeautifulSoup soup: tree
     """
 
-    def __init__(self, ticket):
+    def __init__(self, ticket, response=None):
         """Initialize Web scraper.
 
         :param Ticket ticket: OpenDACHS ticket
+        :param Response response: HTTP response
         """
         try:
             self.ticket = ticket
-            self.response = self._request()
+            if not response:
+                response = self._request()
             self.soup = bs4.BeautifulSoup(
-                self.response.content, features="html.parser"
+                response.content, features="html.parser"
             )
             self.base = self._get_base()
         except Exception as exception:
@@ -83,11 +85,11 @@ class Scraper(object):
             if base:
                 base = base["href"]
             else:
-                path = urllib.parse.urlparse(self.ticket.metadata["url"]).path
-                dirname = os.path.dirname(path)
-                base = "".join(
-                    self.ticket.metadata["url"].partition(dirname)
-                )[:-1]
+                root, ext = os.path.splitext(self.ticket.metadata["url"])
+                if ext.startswith("."):
+                    base = os.path.dirname(root)
+                else:
+                    base = self.ticket.metadata["url"]
         except Exception as exception:
             raise RuntimeError("failed to get base URL") from exception
         return base
