@@ -20,6 +20,7 @@
 """
 
 # standard library imports
+import os
 import urllib
 
 # third party imports
@@ -82,7 +83,11 @@ class Scraper(object):
             if base:
                 base = base["href"]
             else:
-                base = self.ticket.metadata["url"]
+                path = urllib.parse.urlparse(self.ticket.metadata["url"])
+                dirname = os.path.dirname(path)
+                base = "".join(
+                    self.ticket.metadata["url"].partition(dirname)
+                )[:-1]
         except Exception as exception:
             raise RuntimeError("failed to get base URL") from exception
         return base
