@@ -33,7 +33,6 @@ import datetime
 import collections
 import urllib.parse
 import subprocess
-import sqlite3
 
 # third party imports
 import bs4
@@ -476,6 +475,14 @@ class TicketManager(object):
             raise RuntimeError("failed to send email") from exception
         return
 
+    def upload(self, src, dest):
+        """Upload existing WARC archive.
+
+        :param str src: source WARC archive file path
+        :param str dest: destination WARC archive file path
+        """
+        raise NotImplementedError
+
     def submit(self, data):
         """Submit new OpenDACHS ticket.
 
@@ -487,7 +494,10 @@ class TicketManager(object):
         logger = logging.getLogger().getChild(self.submit.__name__)
         try:
             ticket = self._initialize_ticket(data)
-            self.archive(ticket)
+            if "warc" not in data:
+                self.archive(ticket)
+            else:
+                self.upload(data["warc"], ticket.archive)
             row = ticket.get_row()
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
@@ -541,13 +551,13 @@ class TicketManager(object):
             row = sqlite_client.select_row("ticket", (data["ticket"],))
             ticket = src.ticket.Ticket.get_ticket(row)
             storage = "storage/{ticket}".format(ticket=data["ticket"])
-            os.makedirs(storage, exist_ok=True)
             path = "./../webrecorder/data/warcs/{user}".format(
                 user=ticket.user.username
             )
             if os.access(path, os.F_OK):
                 shutil.copytree(path, storage)
             else:
+                os.makedirs(storage, exist_ok=True)
                 shutil.copyfile(
                     ticket.archive, storage+"/{}.warc".format(ticket.id_)
                 )
@@ -650,50 +660,44 @@ class TicketManager(object):
         logger.info("retrieve ticket files")
         files = src.ftp.retrieve_files(self.ftp)
         logger.info("retrieved %d tickets", len(files))
-        submitted = confirmed = accepted = denied = removed = 0
+        counter = {
+            "submitted": 0,
+            "confirmed": 0,
+            "accepted": 0,
+            "denied": 0,
+            "removed": 0
+        }
         for filename in files:
-            try:
-                fp = open(filename)
+            with open(filename) as fp:
                 data = json.load(fp)
-                if data["flag"] == "pending":
+            try:
+                flag = data["flag"]
+                if flag == "pending":
                     ticket = self.submit(data)
-                    self.call_api()
-                    submitted += 1
-                    self.sendmail(ticket, "submitted")
-                elif data["flag"] == "confirmed":
+                    flag = "submitted"
+                elif flag == "confirmed":
                     ticket = self.confirm(data)
-                    confirmed += 1
-                    self.sendmail(ticket, "confirmed")
-                elif data["flag"] == "accepted":
+                elif flag == "accepted":
                     ticket = self.accept(data)
-                    self.call_api()
-                    accepted += 1
-                    self.sendmail(ticket, "accepted")
-                elif data["flag"] == "denied":
+                elif flag == "denied":
                     ticket = self.deny(data)
-                    self.call_api()
-                    denied += 1
-                    self.sendmail(ticket, "denied")
                 else:
-                    msg = "unknown flag {flag}".format(flag=data["flag"])
-                    raise Exception(msg)
+                    raise ValueError("unknown flag {flag}".format(flag=flag))
+                self.call_api()
+                self.sendmail(ticket, flag)
+                counter[flag] += 1
             except Exception as exception:
                 logger.warning("failed to manage ticket")
-                if "ticket" not in locals() and "data" not in locals():
-                    ticket = src.ticket.Ticket("unknown", *(5*(None, )))
-                elif "data" in locals():
+                if "ticket" not in locals():
                     ticket = src.ticket.Ticket(data["ticket"], *(5*(None, )))
                 self.sendmail(ticket, "error")
                 raise RuntimeError(
                     "failed to manage ticket"
                 ) from exception
-            finally:
-                if "fp" in locals():
-                    fp.close()
         for ticket in self.remove_expired():
             try:
                 self.call_api()
-                removed += 1
+                counter["removed"] += 1
                 self.sendmail(ticket, "expired")
             except Exception as exception:
                 logger.warning(
@@ -703,9 +707,6 @@ class TicketManager(object):
                 raise RuntimeError(
                     "failed to remove expired ticket {id}".format(id=ticket.id_)
                 )
-        logger.info("submitted %d new tickets", submitted)
-        logger.info("confirmed %d tickets", confirmed)
-        logger.info("accepted %d tickets", accepted)
-        logger.info("denied %d tickets", denied)
-        logger.info("removed %d expired tickets", removed)
+        for key, value in counter.items():
+            logger.info("%s %d tickets", key, value)
         return
