@@ -41,7 +41,7 @@ def set_logging_up():
         logging.basicConfig(
             format="%(asctime)s %(levelname)s %(message)s",
             level=logging.DEBUG,
-            handlers=(rotating_file_handler)
+            handlers=(rotating_file_handler,)
         )
     except Exception as exception:
         raise SystemExit("failed to set logging up") from exception
@@ -87,11 +87,7 @@ def read_config(filename):
 def main():
     """Main routine."""
     try:
-        logging.basicConfig(
-            filename="storage/opendachs.log",
-            format="%(asctime)s %(levelname)s %(message)s",
-            level=logging.INFO
-        )
+        set_logging_up()
         parser = get_argument_parser()
         args = parser.parse_args()
         ftp = read_config(args.ftp)
