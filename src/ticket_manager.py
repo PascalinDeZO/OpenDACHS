@@ -31,13 +31,9 @@ import string
 import logging
 import datetime
 import collections
-import urllib.parse
 import subprocess
 
 # third party imports
-import bs4
-import warcio.capture_http
-import cfscrape
 
 # library specific imports
 import src.ftp
@@ -45,6 +41,11 @@ import src.email
 import src.sqlite
 import src.ticket
 import src.scraper
+
+
+class TicketManagerError(Exception):
+    """Raised when ticket management fails."""
+    pass
 
 
 class TicketManager(object):
@@ -68,11 +69,12 @@ class TicketManager(object):
             self.sqlite = sqlite
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.create_table()
+        except src.sqlite.SQLiteError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to initialize ticket manager"
-            ) from exception
-        return
+            msg = "failed to initialize ticket manager"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
 
     @staticmethod
     def generate_username(length=8):
@@ -91,9 +93,9 @@ class TicketManager(object):
                 random.choice(alphabet) for _ in range(length)
             )
         except Exception as exception:
-            raise RuntimeError(
-                "failed to generate username"
-            ) from exception
+            msg = "failed to generate username"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return username
 
     @staticmethod
@@ -108,6 +110,7 @@ class TicketManager(object):
         :returns: password
         :rtype: str
         """
+        # FIXME last two chars are always '99'
         try:
             if length < 1:
                 raise ValueError("length < 1")
@@ -117,9 +120,9 @@ class TicketManager(object):
                 for char in base64.b64encode(os.urandom(length)).decode()
             )
         except Exception as exception:
-            raise RuntimeError(
-                "failed to generate password"
-            ) from exception
+            msg = "failed to generate password"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return password
 
     def archive(self, ticket):
@@ -132,11 +135,12 @@ class TicketManager(object):
         try:
             scraper = src.scraper.Scraper(ticket)
             scraper.archive()
+        except src.scraper.ScraperError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to archive {url}".format(url=ticket.metadata["url"])
-            ) from exception
-        return
+            msg = "failed to archive {url}".format(url=ticket.metadata["url"])
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
 
     @staticmethod
     def dump_ticket(ticket):
@@ -148,11 +152,12 @@ class TicketManager(object):
             json_file = "tmp/json_files/{}.json".format(ticket.id_)
             fp = open(json_file, mode="w")
             fp.write(ticket.get_json())
+        except src.ticket.TicketError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to dump OpenDACHS ticket {id}".format(id=ticket.id_)
-            ) from exception
-        return
+            msg = "failed to dump OpenDACHS ticket {id}".format(id=ticket.id_)
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
 
     def _prettyprint(self, value, level=0):
         """Return prettyprint.
@@ -183,10 +188,12 @@ class TicketManager(object):
                     prettyprint += "{level}{v}\n".format(
                         level=level*"-", v=value
                     )
+        except TicketManagerError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to return prettyprint"
-            ) from exception
+            msg = "failed to return prettyprint"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return prettyprint
 
     def compose_plaintext_attachment(self, ticket):
@@ -201,10 +208,14 @@ class TicketManager(object):
             filename = "info.txt"
             text = self._prettyprint(ticket.metadata)
             attachment = src.email.compose_attachment(filename, text)
+        except TicketManagerError:
+            raise
+        except src.email.EmailError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to compose plaintext email attachment"
-            ) from exception
+            msg = "failed to compose plaintext email attachment"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return attachment
 
     @staticmethod
@@ -272,10 +283,12 @@ class TicketManager(object):
                         tag=tag, value=ticket.metadata[key]
                     )
             attachment = src.email.compose_attachment(filename, text)
+        except src.email.EmailError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to compose RIS attachment"
-            ) from exception
+            msg = "failed to compose RIS attachment"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return attachment
 
     def _initialize_user(self, data):
@@ -292,10 +305,14 @@ class TicketManager(object):
             password = self.generate_password()
             email_addr = data["email"]
             user = src.ticket.User(username, role, password, email_addr)
+        except TicketManagerError:
+            raise
+        except src.ticket.TicketError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to initialize Webrecorder user"
-            ) from exception
+            msg = "failed to initialize Webrecorder user"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return user
 
     def _initialize_ticket(self, data):
@@ -319,10 +336,14 @@ class TicketManager(object):
             ticket = src.ticket.Ticket(
                 id_, user, archive, metadata, flag, timestamp
             )
+        except TicketManagerError:
+            raise
+        except src.ticket.TicketError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to initialize OpenDACHS ticket"
-            ) from exception
+            msg = "failed to initialize OpenDACHS ticket"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return ticket
 
     def sendmail(self, ticket, name):
@@ -352,7 +373,7 @@ class TicketManager(object):
             elif name == "error":
                 body = src.email.compose_body(name, ticket=ticket.id_)
             else:
-                raise ValueError(
+                raise TicketManagerError(
                     "unknown email template {name}".format(name=name)
                 )
             if name in ["submitted", "accepted", "denied", "expired"]:
@@ -372,8 +393,14 @@ class TicketManager(object):
                 src.email.sendmail(
                     self.smtp, self.smtp["header_fields"]["reply_to"], email_msg
                 )
+        except TicketManagerError:
+            raise
+        except src.email.EmailError:
+            raise
         except Exception as exception:
-            raise RuntimeError("failed to send email") from exception
+            msg = "failed to send email"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return
 
     def upload(self, src, dest):
@@ -392,7 +419,6 @@ class TicketManager(object):
         :returns: OpenDACHS ticket
         :rtype: Ticket
         """
-        logger = logging.getLogger().getChild(self.submit.__name__)
         try:
             ticket = self._initialize_ticket(data)
             if "warc" not in data:
@@ -403,13 +429,23 @@ class TicketManager(object):
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             sqlite_client.insert([row])
             self.dump_ticket(ticket)
-        except Exception as exception:
-            logger.exception(
-                "failed to submit OpenDACHS ticket %s", data["ticket"]
+        except (
+                src.scraper.ScraperError,
+                src.sqlite.SQLiteError,
+                src.ticket.TicketError,
+                TicketManagerError
+        ) as exception:
+            msg = "failed to submit OpenDACHS ticket {ticket}".format(
+                ticket=data["ticket"]
             )
-            raise RuntimeError(
-                "failed to submit OpenDACHS ticket"
-            ) from exception
+            logging.warning(msg)
+            raise TicketManagerError(msg) from exception
+        except Exception as exception:
+            msg = "failed to submit OpenDACHS ticket {ticket}".format(
+                ticket=data["ticket"]
+            )
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return ticket
 
     def confirm(self, data):
@@ -420,22 +456,24 @@ class TicketManager(object):
         :returns: OpenDACHS ticket
         :rtype: Ticket
         """
-        logger = logging.getLogger().getChild(self.confirm.__name__)
         try:
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.update_row(
                 "flag", "ticket", (data["flag"], data["ticket"])
             )
             ticket = src.ticket.Ticket.get_ticket(row)
-        except Exception as exception:
-            logger.exception(
-                "failed to confirm OpenDACHS ticket %s", data["ticket"]
+        except (src.sqlite.SQLiteError, src.ticket.TicketError) as exception:
+            msg = "failed to confirm OpenDACHS ticket {ticket}".format(
+                ticket=data["ticket"]
             )
-            raise RuntimeError(
-                "failed to confirm OpenDACHS ticket {id}".format(
-                    id=data["ticket"]
-                )
-            ) from exception
+            logging.warning(msg)
+            raise TicketManagerError(msg) from exception
+        except Exception as exception:
+            msg = "failed to confirm OpenDACHS ticket {ticket}".format(
+                ticket=data["ticket"]
+            )
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return ticket
 
     def accept(self, data):
@@ -446,7 +484,6 @@ class TicketManager(object):
         :returns: OpenDACHS ticket
         :rtype: Ticket
         """
-        logger = logging.getLogger().getChild(self.accept.__name__)
         try:
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
@@ -463,20 +500,27 @@ class TicketManager(object):
                     ticket.archive, storage+"/{}.warc".format(ticket.id_)
                 )
             os.unlink(ticket.archive)
-            logger.info("moved WARC %s to storage", ticket.archive)
+            logging.info("moved WARC %s to storage", ticket.archive)
             sqlite_client.delete("ticket", [(ticket.id_,)])
-            logger.info("deleted ticket %s", ticket.id_)
+            logging.info("deleted ticket %s", ticket.id_)
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
-        except Exception as exception:
-            logger.exception(
-                "failed to accept OpenDACHS ticket %s", data["ticket"]
+        except (
+            src.sqlite.SQLiteError,
+            src.ticket.TicketError,
+            TicketManagerError
+        ) as exception:
+            msg = "failed to accept OpenDACHS ticket {ticket}".format(
+                ticket=data["ticket"]
             )
-            raise RuntimeError(
-                "failed to accept OpenDACHS ticket {id}".format(
-                    id=data["ticket"]
-                )
-            ) from exception
+            logging.warning(msg)
+            raise TicketManagerError(msg) from exception
+        except Exception as exception:
+            msg = "failed to accept OpenDACHS ticket {ticket}".format(
+                ticket = data["ticket"]
+            )
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return ticket
 
     def deny(self, data):
@@ -487,7 +531,6 @@ class TicketManager(object):
         :returns: OpenDACHS ticket
         :rtype: Ticket
         """
-        logger = logging.getLogger().getChild(self.deny.__name__)
         try:
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             row = sqlite_client.select_row("ticket", (data["ticket"],))
@@ -496,17 +539,26 @@ class TicketManager(object):
             sqlite_client.delete("ticket", [(ticket.id_,)])
             ticket.flag = "deleted"
             self.dump_ticket(ticket)
+        except (
+                src.sqlite.SQLiteError,
+                src.ticket.TicketError,
+                TicketManagerError
+        ) as exception:
+            msg = "failed to deny OpenDACHS ticket {ticket}".format(
+                ticket=data["ticket"]
+            )
+            logging.warning(msg)
+            raise TicketManagerError(msg) from exception
         except Exception as exception:
-            logger.exception(
-                "failed to deny OpenDACHS ticket %s", data["ticket"])
-            raise RuntimeError(
-                "failed to deny OpenDACHS ticket {id}".format(id=data["ticket"])
-            ) from exception
+            msg = "failed to deny OpenDACHS ticket {ticket}".format(
+                ticket=data["ticket"]
+            )
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
         return ticket
 
     def remove_expired(self):
         """Remove expired OpenDACHS tickets."""
-        logger = logging.getLogger().getChild(self.remove_expired.__name__)
         try:
             sqlite_client = src.sqlite.SQLiteClient(self.sqlite)
             parameters = (
@@ -519,41 +571,73 @@ class TicketManager(object):
             )
             tickets = [src.ticket.Ticket.get_ticket(row) for row in rows]
             for ticket in tickets:
-                if ticket.flag == "pending":
-                    logger.info(
-                        "remove expired ticket %s (timestamp %s)",
-                        ticket.id_, ticket.timestamp
+                try:
+                    if ticket.flag == "pending":
+                        logging.info(
+                            "remove expired ticket %s (timestamp %s)",
+                            ticket.id_, ticket.timestamp
+                        )
+                        os.unlink(ticket.archive)
+                        sqlite_client.delete("ticket", [(ticket.id_,)])
+                        ticket.flag = "deleted"
+                        self.dump_ticket(ticket)
+                        yield(ticket)
+                except (
+                        src.sqlite.SQLiteError,
+                        src.ticket.TicketError,
+                        TicketManagerError
+                ) as exception:
+                    msg = "failed to remove OpenDACHS ticket {ticket}".format(
+                        ticket=ticket.id_
                     )
-                    os.unlink(ticket.archive)
-                    sqlite_client.delete("ticket", [(ticket.id_,)])
-                    ticket.flag = "deleted"
-                    self.dump_ticket(ticket)
-                    yield(ticket)
+                    logging.warning(msg)
+                    raise TicketManagerError(msg) from exception
+                except Exception as exception:
+                    msg = "failed to remove OpenDACHS ticket {ticket}".format(
+                        ticket=ticket.id_
+                    )
+                    logging.exception(msg)
+                    raise TicketManagerError(msg) from exception
+        except (
+                src.sqlite.SQLiteError,
+                src.ticket.TicketError,
+                TicketManagerError
+        ) as exception:
+            msg = "failed to remove one or more expired OpenDACHS tickets"
+            logging.warning(msg)
+            raise TicketManagerError(msg) from exception
         except Exception as exception:
-            raise RuntimeError(
-                "failed to remove expired OpenDACHS tickets"
-            ) from exception
+            msg = "failed to remove one or more expired OpenDACHS tickets"
+            logging.exception(msg)
+            raise TicketManagerError(msg) from exception
 
     def call_api(self):
         """Call Webrecorder API."""
         # FIXME stdout is not logged
-        args = [
-            "docker", "exec", "-it", "webrecorder_app_1",
-            "python3", "-m", "webrecorder.opendachs"
-        ]
-        child = subprocess.Popen(args, stderr=subprocess.PIPE)
-        while True:
-            returncode = child.poll()
-            if returncode is None:
-                continue
-            else:
-                break
-        if child.returncode != 0:
-            raise RuntimeError(
-                "failed to call Webrecorder API (exit status {})".format(
+        try:
+            args = [
+                "docker", "exec", "-it", "webrecorder_app_1",
+                "python3", "-m", "webrecorder.opendachs"
+            ]
+            child = subprocess.Popen(args, stderr=subprocess.PIPE)
+            while True:
+                returncode = child.poll()
+                if returncode is None:
+                    continue
+                else:
+                    break
+            if child.returncode != 0:
+                msg = "failed to call Webrecorder API (exit status {})".format(
                     child.returncode
                 )
-            )
+                logging.exception(msg)
+                raise TicketManagerError(msg)
+        except TicketManagerError:
+            raise
+        except Exception as exception:
+            msg = "failed to call Webrecorder API"
+            logging.exception(msg)
+            raise TicketManagerError(msg)
 
     def manage(self):
         """Manage OpenDACHS tickets."""
@@ -583,31 +667,57 @@ class TicketManager(object):
                 elif flag == "denied":
                     ticket = self.deny(data)
                 else:
-                    raise ValueError("unknown flag {flag}".format(flag=flag))
+                    raise TicketManagerError(
+                        "unknown flag {flag}".format(flag=flag)
+                    )
+            except TicketManagerError:
+                if "ticket" not in locals():
+                    ticket = src.ticket.Ticket(data["ticket"], *(5*(None,)))
+                self.sendmail(ticket, "error")
+                raise
+            except Exception as exception:
+                if "ticket" not in locals():
+                    ticket = src.ticket.Ticket(data["ticket"], *(5*(None,)))
+                msg = "failed to manage OpenDACHS ticket {ticket}".format(
+                    ticket=ticket.id_
+                )
+                logging.exception(msg)
+                self.sendmail(ticket, "error")
+                raise TicketManagerError(msg)
+            try:
                 self.call_api()
                 self.sendmail(ticket, flag)
                 counter[flag] += 1
-            except Exception as exception:
-                logger.warning("failed to manage ticket")
-                if "ticket" not in locals():
-                    ticket = src.ticket.Ticket(data["ticket"], *(5*(None, )))
+            except TicketManagerError:
+                msg = "failed to complete OpenDACHS ticket {ticket}".format(
+                    ticket=ticket.id_
+                )
+                logging.warning(msg)
                 self.sendmail(ticket, "error")
-                raise RuntimeError(
-                    "failed to manage ticket"
-                ) from exception
+                raise
+            except Exception as exception:
+                msg = "failed to complete OpenDACHS ticket {ticket}".format(
+                    ticket=ticket.id_
+                )
+                logging.exception(msg)
+                self.sendmail(ticket, "error")
         for ticket in self.remove_expired():
             try:
                 self.call_api()
                 counter["removed"] += 1
                 self.sendmail(ticket, "expired")
-            except Exception as exception:
-                logger.warning(
-                    "failed to remove expired ticket {id}".format(id=ticket.id_)
-                )
+            except TicketManagerError:
                 self.sendmail(ticket, "error")
-                raise RuntimeError(
-                    "failed to remove expired ticket {id}".format(id=ticket.id_)
+                raise
+            except Exception as exception:
+                msg = (
+                    "failed to remove expired OpenDACHS ticket {ticket}".format(
+                        ticket=ticket.id_
+                    )
                 )
+                logging.exception(msg)
+                self.sendmail(ticket, "error")
+                raise TicketManagerError(msg)
         for key, value in counter.items():
-            logger.info("%s %d tickets", key, value)
+            logging.info("%s %d tickets", key, value)
         return
