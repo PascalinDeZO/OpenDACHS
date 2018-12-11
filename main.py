@@ -24,10 +24,27 @@
 import argparse
 import configparser
 import logging
+import logging.handlers
 
 # third party imports
 # library specific imports
 import src.ticket_manager
+
+
+def set_logging_up():
+    """Set logging up."""
+    try:
+        filename = "storage/log/opendachs.log"
+        rotating_file_handler = logging.handlers.TimedRotatingFileHandler(
+            filename, when="d", interval="1", backupCount=14
+        )
+        logging.basicConfig(
+            format="%(asctime)s %(levelname)s %(message)s",
+            level=logging.DEBUG,
+            handlers=(rotating_file_handler)
+        )
+    except Exception as exception:
+        raise SystemExit("failed to set logging up") from exception
 
 
 def get_argument_parser():
