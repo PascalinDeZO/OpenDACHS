@@ -39,7 +39,9 @@ def set_logging_up():
             filename, when="d", interval="1", backupCount=14
         )
         logging.basicConfig(
-            format="%(asctime)s %(levelname)s %(message)s",
+            format=(
+                "%(asctime)s %(levelname)s %(module) %(funcName)% (message)s"
+            ),
             level=logging.DEBUG,
             handlers=(rotating_file_handler,)
         )
@@ -59,8 +61,9 @@ def get_argument_parser():
         parser.add_argument("smtp", help="SMTP configuration")
         parser.add_argument("sqlite", help="SQLite configuration")
     except Exception as exception:
-        msg = "failed to get argument parser:{}".format(exception)
-        raise SystemExit(msg)
+        msg = "failed to get argument parser"
+        logging.exception(msg)
+        raise SystemExit(msg) from exception
     return parser
 
 
@@ -77,10 +80,11 @@ def read_config(filename):
         config.optionxform = str
         config.read(filename)
     except Exception as exception:
-        msg = "failed to read INI configuration file {}in:{}".format(
-            filename, exception
+        msg = "failed to read INI configuration file {filename} in".format(
+            filename=filename
         )
-        raise SystemExit(msg)
+        logging.exception(msg)
+        raise SystemExit(msg) from exception
     return config
 
 
@@ -95,9 +99,12 @@ def main():
         sqlite = read_config(args.sqlite)
         ticket_manager = src.ticket_manager.TicketManager(ftp, smtp, sqlite)
         ticket_manager.manage()
+    except SystemExit:
+        raise
     except Exception as exception:
-        msg = "an exception was raised:{}".format(exception)
-        raise SystemExit(msg)
+        msg = "an exception was raised"
+        logging.exception(msg)
+        raise SystemExit(msg) from exception
     return
 
 
