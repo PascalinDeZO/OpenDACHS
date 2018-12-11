@@ -29,6 +29,11 @@ import tempfile
 # library specific imports
 
 
+class FTPError(Exception):
+    """Raised when FTP client fails."""
+    pass
+
+
 def get_ftp_client(ftp):
     """Get FTP client.
 
@@ -41,9 +46,9 @@ def get_ftp_client(ftp):
         ftp_client = ftplib.FTP_TLS(**ftp["FTP"])
         ftp_client.prot_p()
     except Exception as exception:
-        raise RuntimeError(
-            "failed to get FTP client"
-        ) from exception
+        msg = "failed to get FTP client"
+        logging.exception(msg)
+        raise FTPError(msg) from exception
     return ftp_client
 
 
@@ -62,9 +67,9 @@ def retrieve_file(ftp_client, filename):
         fp.close()
         ftp_client.delete(filename)
     except Exception as exception:
-        raise RuntimeError(
-            "failed to retrieve file {filename}".format(filename=filename)
-        ) from exception
+        msg = "failed to retrieve file {filename}".format(filename=filename)
+        logging.exception(msg)
+        raise FTPError(msg) from exception
     return fp.name
 
 
@@ -77,16 +82,17 @@ def retrieve_files(ftp):
     :rtype: str
     """
     try:
-        logger = logging.getLogger().getChild(retrieve_files.__name__)
         ftp_client = get_ftp_client(ftp)
         filenames = []
         for filename in ftp_client.nlst(ftp["cmd"]["RETR"]):
             try:
                 filenames.append(retrieve_file(ftp_client, filename))
+            except FTPError:
+                logging.warning("failed to retrieve file %s", filename)
             except Exception as exception:
-                logger.warning("failed to retrieve file %s", filename)
+                logging.exception("failed to retrieve file %s", filename)
     except Exception as exception:
-        raise RuntimeError(
-            "failed to retrieve files"
-        ) from exception
+        msg = "failed to retrieve files"
+        logging.exception(msg)
+        raise FTPError(msg) from exception
     return filenames
