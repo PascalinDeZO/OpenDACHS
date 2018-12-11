@@ -33,6 +33,11 @@ import jinja2
 # library specific imports
 
 
+class EmailError(Exception):
+    """Raised when email composition and sending fails."""
+    pass
+
+
 def _load_templates(path="templates"):
     """Load email templates.
 
@@ -42,9 +47,11 @@ def _load_templates(path="templates"):
     try:
         loader = jinja2.FileSystemLoader(path)
     except Exception as exception:
-        raise RuntimeError(
-            "failed to load email templates"
-        ) from exception
+        msg = "failed to load email templates in directory {path}".format(
+            path=path
+        )
+        logging.exception(msg)
+        raise EmailError(msg) from exception
     return loader
 
 
@@ -59,10 +66,12 @@ def load_template(name, path="templates"):
     try:
         loader = _load_templates(path=path)
         template = loader.load(jinja2.Environment(), name)
+    except EmailError:
+        raise
     except Exception as exception:
-        raise RuntimeError(
-            "failed to load email template {name}".format(name=name)
-        ) from exception
+        msg = "failed to load email template {name}".format(name=name)
+        logging.exception(msg)
+        raise EmailError(msg) from exception
     return template
 
 
@@ -80,10 +89,12 @@ def compose_body(name, *args, **kwargs):
         template = load_template(name)
         body = template.render(*args, **kwargs)
         body = email.mime.text.MIMEText(body)
+    except EmailError:
+        raise
     except Exception as exception:
-        raise RuntimeError(
-            "failed to compose email body"
-        ) from exception
+        msg = "failed to compose email body"
+        logging.exception(msg)
+        raise EmailError(msg) from exception
     return body
 
 
@@ -102,9 +113,9 @@ def compose_attachment(filename, text):
             "Content-Disposition", "attachment", filename=filename
         )
     except Exception as exception:
-        raise RuntimeError(
-            "failed to compose email attachment"
-        ) from exception
+        msg = "failed to compose email attachment"
+        logging.exception(msg)
+        raise EmailError(msg) from exception
     return attachment
 
 
@@ -124,10 +135,9 @@ def _add_header_fields(smtp, to_addrs, subject, msg):
         msg["To"] = to_addrs
         msg["Subject"] = subject
     except Exception as exception:
-        raise RuntimeError(
-            "failed to add header fields"
-        ) from exception
-    return
+        exception_msg = "failed to add header fields"
+        logging.exception(exception_msg)
+        raise EmailError(exception_msg) from exception
 
 
 def compose_msg(smtp, to_addrs, subject, body, attachment=None):
@@ -149,10 +159,12 @@ def compose_msg(smtp, to_addrs, subject, body, attachment=None):
         msg.attach(body)
         if attachment:
             msg.attach(attachment)
+    except EmailError:
+        raise
     except Exception as exception:
-        raise RuntimeError(
-            "failed to compose email message"
-        ) from exception
+        exception_msg = "failed to compose email message"
+        logging.exception(exception_msg)
+        raise EmailError(exception_msg) from exception
     return msg
 
 
@@ -164,16 +176,18 @@ def sendmail(smtp, to_addrs, msg):
     :param MIMEMultipart msg: email message
     """
     try:
-        logger = logging.getLogger().getChild(sendmail.__name__)
         smtp_client = smtplib.SMTP(
             host=smtp["SMTP"]["host"], port=smtp["SMTP"]["port"]
         )
         smtp_client.sendmail(
             smtp["header_fields"]["from"], to_addrs, msg.as_string()
         )
-        logger.info("sent email to %s", to_addrs)
+        logging.info("sent email to %s", to_addrs)
+    except EmailError:
+        raise
     except Exception as exception:
-        raise RuntimeError(
-            "failed to send email"
-        ) from exception
-    return
+        exception_msg = "failed to send email to {to_addrs}".format(
+            to_addrs=to_addrs
+        )
+        logging.exception(exception_msg)
+        raise EmailError(exception_msg) from exception
