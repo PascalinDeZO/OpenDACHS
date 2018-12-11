@@ -22,6 +22,7 @@
 
 # standard library imports
 import json
+import logging
 import collections
 
 # third party imports
@@ -31,6 +32,11 @@ import collections
 User = collections.namedtuple(
     "User", ["username", "role", "password", "email_addr"]
 )
+
+
+class TicketError(Exception):
+    """Raised when OpenDACHS ticket fails."""
+    pass
 
 
 class Ticket(object):
@@ -60,10 +66,9 @@ class Ticket(object):
             self._flag = flag
             self._timestamp = timestamp
         except Exception as exception:
-            raise RuntimeError(
-                "failed to initialize OpenDACHS ticket"
-            ) from exception
-        return
+            msg = "failed to initialize OpenDACHS ticket"
+            logging.exception(msg)
+            raise TicketError(msg) from exception
 
     @property
     def flag(self):
@@ -72,7 +77,6 @@ class Ticket(object):
     @flag.setter
     def flag(self, value):
         self._flag = value
-        return
 
     @property
     def timestamp(self):
@@ -81,7 +85,6 @@ class Ticket(object):
     @timestamp.setter
     def timestamp(self, value):
         self._timestamp = value
-        return
 
     def get_row(self):
         """Get SQLite row.
@@ -99,9 +102,9 @@ class Ticket(object):
                 self.timestamp
             )
         except Exception as exception:
-            raise RuntimeError(
-                "failed to get SQLite row"
-            ) from exception
+            msg = "failed to get SQLite row"
+            logging.exception(msg)
+            raise TicketError(msg) from exception
         return row
 
     @classmethod
@@ -121,10 +124,12 @@ class Ticket(object):
             flag = row[4]
             timestamp = row[5]
             ticket = cls(id_, user, archive, metadata, flag, timestamp)
+        except TicketError:
+            raise
         except Exception as exception:
-            raise RuntimeError(
-                "failed to get OpenDACHS ticket"
-            ) from exception
+            msg = "failed to get OpenDACHS ticket"
+            logging.exception(msg)
+            raise TicketError(msg) from exception
         return ticket
 
     def get_json(self):
@@ -144,7 +149,7 @@ class Ticket(object):
             }
             json_string = json.dumps(json_string)
         except Exception as exception:
-            raise RuntimeError(
-                "failed to get JSON formatted string"
-            ) from exception
+            msg = "failed to get JSON formatted string"
+            logging.exception(msg)
+            raise TicketError(msg)
         return json_string
