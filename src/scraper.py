@@ -22,6 +22,7 @@
 # standard library imports
 import os
 import urllib
+import logging
 
 # third party imports
 import bs4
@@ -29,6 +30,11 @@ import warcio.capture_http
 import cfscrape
 
 # library specific imports
+
+
+class ScraperError(Exception):
+    """Raised when web scraper fails."""
+    pass
 
 
 class Scraper(object):
@@ -54,9 +60,9 @@ class Scraper(object):
             )
             self.base = self._get_base()
         except Exception as exception:
-            raise RuntimeError(
-                "failed to initialize Web scraper"
-            ) from exception
+            msg = "failed to initialize Web scraper"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
 
     def _request(self):
         """Send HTTP request.
@@ -69,9 +75,9 @@ class Scraper(object):
             with warcio.capture_http.capture_http(self.ticket.archive):
                 response = scraper.get(self.ticket.metadata["url"])
         except Exception as exception:
-            raise RuntimeError(
-                "failed to send HTTP request"
-            ) from exception
+            msg = "failed to send HTTP request"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
         return response
 
     def _get_base(self):
@@ -91,7 +97,9 @@ class Scraper(object):
                 else:
                     base = self.ticket.metadata["url"]
         except Exception as exception:
-            raise RuntimeError("failed to get base URL") from exception
+            msg = "failed to get base URL"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
         return base
 
     def get_absolute_url(self, relative):
@@ -122,7 +130,9 @@ class Scraper(object):
                     base=self.base, relative=relative
                 )
         except Exception as exception:
-            raise RuntimeError("failed to get absolute URL") from exception
+            msg = "failed to get absolute URL"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
         return absolute
 
     def get_link_tag_urls(self):
@@ -135,8 +145,12 @@ class Scraper(object):
             for link in self.soup.find_all("link"):
                 if link["rel"][0] == "stylesheet":
                     yield(self.get_absolute_url(link["href"]))
+        except ScraperError:
+            raise
         except Exception as exception:
-            raise RuntimeError("failed to get <link> URLs") from exception
+            msg = "failed to get <link> tag URLs"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
 
     def get_script_tag_urls(self):
         """Get <script> tag URLs.
@@ -148,8 +162,12 @@ class Scraper(object):
             for script in self.soup.find_all("script"):
                 if "src" in script.attrs:
                     yield(self.get_absolute_url(script["src"]))
+        except ScraperError:
+            raise
         except Exception as exception:
-            raise RuntimeError("failed to get <script> URLs") from exception
+            msg = "failed to get <script> tag URLs"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
 
     def get_img_tag_urls(self):
         """Get <img> tag URLs.
@@ -160,8 +178,12 @@ class Scraper(object):
         try:
             for img in self.soup.find_all("img"):
                 yield(self.get_absolute_url(img["src"]))
+        except ScraperError:
+            raise
         except Exception as exception:
-            raise RuntimeError("failed to get <img> URLs") from exception
+            msg = "failed to get <img> tag URLs"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
 
     def get_video_tag_urls(self):
         """Get <video> tag URLs.
@@ -173,8 +195,12 @@ class Scraper(object):
             for video in self.soup.find_all("video"):
                 for source in video.find_all("source"):
                     yield(self.get_absolute_url(source["src"]))
+        except ScraperError:
+            raise
         except Exception as exception:
-            raise RuntimeError("failed to get <video> URLs")
+            msg = "failed to get <video> tag URLs"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
 
     def get_audio_tag_urls(self):
         """Get <audio> tag URLs.
@@ -186,8 +212,12 @@ class Scraper(object):
             for audio in self.soup.find_all("audio"):
                 for source in audio.find_all("source"):
                     yield(self.get_absolute_url(source["src"]))
+        except ScraperError:
+            raise
         except Exception as exception:
-            raise RuntimeError("failed to get <audio> URLs")
+            msg = "failed to get <audio> tag URLs"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
 
     def get_picture_tag_urls(self):
         """Get <picture> tag URLs.
@@ -199,14 +229,18 @@ class Scraper(object):
             for picture in self.soup.find_all("picture"):
                 for source in picture.find_all("source"):
                     yield(self.get_absolute_url(source["srcset"]))
+        except ScraperError:
+            raise
         except Exception as exception:
-            raise RuntimeError("failed to get <picture> URLS")
+            msg = "failed to get <picture> tag URLs"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
 
     def archive(
             self,
             tags=("link", "script", "img", "video", "audio", "picture")
     ):
-        """Archive OpenDACHS ticket.
+        """Archive OpenDACHS ticket URL.
 
         :param tuple tags: external resources
         """
@@ -224,9 +258,13 @@ class Scraper(object):
                 for tag in tags:
                     for url in get_urls[tag]():
                         scraper.get(url)
+        except ScraperError:
+            raise
         except KeyError as exception:
-            raise ValueError("unsupported tag") from exception
+            msg = "unsupported tag"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
         except Exception as exception:
-            raise RuntimeError(
-                "failed to archive OpenDACHS ticket"
-            ) from exception
+            msg = "failed to archive OpenDACHS ticket URL"
+            logging.exception(msg)
+            raise ScraperError(msg) from exception
