@@ -38,7 +38,8 @@ def set_logging_up():
     try:
         filename = "storage/log/opendachs.log"
         if not os.access(filename, os.F_OK):
-            pathlib.Path.touch(filename)
+            path = pathlib.Path(filename)
+            path.touch()
         rotating_file_handler = logging.handlers.TimedRotatingFileHandler(
             filename, when="d", interval=1, backupCount=14
         )
