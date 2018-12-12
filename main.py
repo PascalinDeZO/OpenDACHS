@@ -36,7 +36,7 @@ def set_logging_up():
     try:
         filename = "storage/log/opendachs.log"
         rotating_file_handler = logging.handlers.TimedRotatingFileHandler(
-            filename, when="d", interval="1", backupCount=14
+            filename, when="d", interval=1, backupCount=14
         )
         logging.basicConfig(
             format=(
