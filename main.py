@@ -45,7 +45,7 @@ def set_logging_up():
         )
         logging.basicConfig(
             format=(
-                "%(asctime)s %(levelname)s %(module) %(funcName)% (message)s"
+                "%(asctime)s %(levelname)s %(module)s %(funcName)s %(message)s"
             ),
             level=logging.DEBUG,
             handlers=(rotating_file_handler,)
