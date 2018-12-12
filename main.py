@@ -21,8 +21,10 @@
 
 
 # standard library imports
+import os
 import argparse
 import configparser
+import pathlib
 import logging
 import logging.handlers
 
@@ -35,6 +37,8 @@ def set_logging_up():
     """Set logging up."""
     try:
         filename = "storage/log/opendachs.log"
+        if not os.access(filename, os.F_OK):
+            pathlib.Path.touch(filename)
         rotating_file_handler = logging.handlers.TimedRotatingFileHandler(
             filename, when="d", interval=1, backupCount=14
         )
