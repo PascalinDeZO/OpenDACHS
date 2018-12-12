@@ -36,7 +36,7 @@ import src.ticket_manager
 def set_logging_up():
     """Set logging up."""
     try:
-        filename = "storage/log/opendachs.log"
+        filename = "storage/logs/opendachs.log"
         if not os.access(filename, os.F_OK):
             path = pathlib.Path(filename)
             path.touch()
